@@ -1,6 +1,6 @@
 ; =====================================================================
 ;  SSM — Simple Sales Management — Instalador (Inno Setup 6+)
-;  Versao 0.0.2
+;  Versao 0.0.1
 ;
 ;  - Idiomas do setup: Ingles, Portugues (BR), Espanhol
 ;  - Nome do programa instalado (atalhos, Menu Iniciar, Adicionar/Remover
@@ -20,7 +20,7 @@
 ;  Compilar: abrir no Inno Setup Compiler > Compile   (ou: iscc ssm_setup.iss)
 ; =====================================================================
 
-#define MyAppVersion "0.0.2"
+#define MyAppVersion "0.0.1"
 #define MyAppPublisher "Levi Pantaleão"
 #define MyAppExeName "ssm.exe"
 ; GUID proprio do SSM (NAO reutilizar no BSM)
