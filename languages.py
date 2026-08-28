@@ -375,7 +375,7 @@ _PT: dict[str, str] = {
     "Saving…": "Salvando…",
     "Failed to save": "Falha ao salvar",
     "Open in Explorer": "Abrir no Explorer",
-    # ===== Added for searchbar.html + clients.html =====
+    # ===== Added for management.html (search bar + clients list) =====
     "Select all": "Selecionar todos",
     "Selected count": "Quantidade selecionada",
     "Print": "Imprimir",
@@ -592,7 +592,7 @@ _ES: dict[str, str] = {
     "Saving…": "Guardando…",
     "Failed to save": "Fallo al guardar",
     "Open in Explorer": "Abrir en el Explorador",
-    # ===== Added for searchbar.html + clients.html =====
+    # ===== Added for management.html (search bar + clients list) =====
     "Select all": "Seleccionar todo",
     "Selected count": "Cantidad seleccionada",
     "Print": "Imprimir",

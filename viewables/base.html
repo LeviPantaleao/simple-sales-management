@@ -125,7 +125,7 @@
     --sidebar-w:260px;--sidebar-w-collapsed:64px;--sidebar-current-w:var(--sidebar-w);
     --sidebar-anim:220ms;
 
-    /* (mantidos aqui porque searchbar.html usa) */
+    /* (mantidos aqui porque a search bar de management.html usa) */
     --page-search-w:1022px;
     --page-search-overlap:0px;--page-search-h:0px;
     --page-search-min-h:66px;
@@ -402,7 +402,7 @@
   input[type="checkbox"],input[type="radio"]{accent-color:var(--accent)}
 
   /* ✅ Feedback claro de campo inválido (contorno vermelho + chacoalhada) —
-     usado por sale.html e pela ferramenta de desconto em management.html */
+     usado pelo formulário de Nova Venda e pela ferramenta de desconto em management.html */
   @keyframes inputShake{
     0%{ transform:translateX(0) }
     18%{ transform:translateX(-4px) }
@@ -568,8 +568,8 @@
     opacity:0!important; pointer-events:none!important; left:-9999px!important; top:-9999px!important;
   }
 
-  /* ===== Picker popup (Selecionar Cliente / Ver / Editar / Imprimir) — igual
-     em sale.html e management.html, com escala via media queries abaixo ===== */
+  /* ===== Picker popup (Selecionar Cliente / Ver / Editar / Imprimir) — usado
+     em management.html, com escala via media queries abaixo ===== */
   .picker-backdrop{
     position:fixed; inset:0; z-index:1002;
     display:grid; place-items:center; padding:24px;

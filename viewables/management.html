@@ -676,8 +676,8 @@ body.lock-scroll{ position: fixed; inset: 0; width: 100%; top: var(--lock-top, 0
 
 /* ===================== POPUP (BASE) =====================
    .picker-backdrop/.picker-sheet/.picker-header/.picker-title/.picker-body/
-   .picker-actions e o .popup-close vêm de base.html (evita duplicação com
-   sale.html). Só os z-index por popup (empilhamento entre si) ficam aqui. */
+   .picker-actions e o .popup-close vêm de base.html (evita duplicação).
+   Só os z-index por popup (empilhamento entre si) ficam aqui. */
 #printPicker{ z-index:4200; }
 #viewPicker { z-index:4210; }
 #editPicker { z-index:4220; }
@@ -3167,9 +3167,10 @@ body.main-chrome #bulkPanel{display:none!important}
   </button>
 </div>
 
-<!-- Hints de edit/print: removidos daqui (duplicavam #editHint/#printHint do searchbar.html,
-     que já cobrem a mesma função com ícone+título+descrição). O estado editArmed/printArmed
-     continua controlado abaixo, só a UI própria (redundante) foi removida. -->
+<!-- Hints de edit/print: removidos daqui (duplicavam #editHint/#printHint definidos
+     mais abaixo nesta página, que já cobrem a mesma função com ícone+título+descrição).
+     O estado editArmed/printArmed continua controlado abaixo, só a UI própria
+     (redundante) foi removida. -->
 
 {% if mode == 'sales' %}
 <!-- ===== Print preview popup (só no modo sales) ===== -->
@@ -3260,7 +3261,7 @@ body.main-chrome #bulkPanel{display:none!important}
     <div class="picker-body scroll">
       <div class="sheet-inner">
         {% if mode == 'sales' %}
-        <!-- ✅ Mesma lógica de layout do formulário "Sale" em sale.html:
+        <!-- ✅ Mesma lógica de layout do formulário "Sale" (Nova Venda) desta página:
              grade 2 colunas (Produto/Valor) + campo de largura total abaixo. -->
         <div class="kvgrid">
           <div class="kv">
@@ -3281,7 +3282,7 @@ body.main-chrome #bulkPanel{display:none!important}
           </div>
         </div>
         {% else %}
-        <!-- ✅ Mesma lógica de layout do formulário "Cliente" em sale.html:
+        <!-- ✅ Mesma lógica de layout do formulário "Cliente" desta página:
              campos empilhados em coluna única. -->
         <div class="kvgrid stacked">
           <div class="kv">
@@ -4302,7 +4303,7 @@ cards.addEventListener('click',(e)=>{
   openViewByCard(card);
 });
 
-/* ====== BRIDGE p/ FAB do base.html/searchbar.html ====== */
+/* ====== BRIDGE p/ FAB do base.html (search bar desta página) ====== */
 (function(){
   function cancelAllModes(){
     try{ setBulk(false,null,true); }catch(e){}
@@ -4627,7 +4628,7 @@ cards.addEventListener('click',(e)=>{
   openViewByCard(card);
 });
 
-/* ====== BRIDGE p/ FAB do base.html/searchbar.html ====== */
+/* ====== BRIDGE p/ FAB do base.html (search bar desta página) ====== */
 (function(){
   function cancelAllModes(){
     try{ setEditArmed(false,true); }catch(e){}

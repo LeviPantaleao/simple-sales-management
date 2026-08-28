@@ -1,4 +1,4 @@
-﻿# server.py â€” completo â€” adaptado para o sales.html atual (r.amount / r.final_amount / r.sale_description)
+# server.py — completo — adaptado para o management.html atual (r.amount / r.final_amount / r.sale_description)
 from __future__ import annotations
 
 import sys
@@ -46,12 +46,12 @@ except Exception:
 
 # --- PDF (fpdf2) --- (lazy import to speed startup)
 def _get_FPDF():
-    """Importa fpdf2 somente quando necessÃ¡rio (rotas de recibo)."""
+    """Importa fpdf2 somente quando necessário (rotas de recibo)."""
     try:
         from fpdf import FPDF  # fpdf2
         return FPDF
     except Exception as e:
-        raise RuntimeError("DependÃªncia faltando: instale fpdf2 (pip install fpdf2).") from e
+        raise RuntimeError("Dependência faltando: instale fpdf2 (pip install fpdf2).") from e
 
 
 # --------------------------------------------------------------------------------------
@@ -200,7 +200,7 @@ def _save_bootstrap_dir(data_dir: Path) -> None:
 def _ensure_ssm_data_dir(base: Path) -> Path:
     """
     Garante a estrutura <base>/SimpleSalesManagement/data.
-    Se 'base' jÃ¡ for .../SimpleSalesManagement/data, mantÃ©m.
+    Se 'base' já for .../SimpleSalesManagement/data, mantém.
     """
     s = str(base).replace("\\", "/").rstrip("/").lower()
     if s.endswith("/simplesalesmanagement/data"):
@@ -378,7 +378,7 @@ def _grant_session_cookie(resp):
         pass
     return resp
 # --------------------------------------------------------------------------------------
-# TEMP BIN (download token) â€” usado para exportar XLSX/PDF sem gravar em disco
+# TEMP BIN (download token) — usado para exportar XLSX/PDF sem gravar em disco
 # --------------------------------------------------------------------------------------
 _TEMP_BIN: dict[str, tuple[bytes, str, str, float]] = {}
 
@@ -703,7 +703,7 @@ def _save_json(p: Path, obj):
 
 
 # --------------------------------------------------------------------------------------
-# Export/Import bundle (SSM signed format) â€” "recognizable only by the program"
+# Export/Import bundle (SSM signed format) — "recognizable only by the program"
 # --------------------------------------------------------------------------------------
 _EXPORT_KEY_FILE = CONFIG_DIR / "export_key.json"
 
@@ -896,13 +896,13 @@ def _parse_money_any(v) -> float:
 
     # 1.234 (pt) ou 1,234 (en) -> tenta inferir
     if "," in s:
-        # se parece "1,234" e nÃ£o tem decimais -> remove vÃ­rgula como grupo
+        # se parece "1,234" e não tem decimais -> remove vírgula como grupo
         if re.fullmatch(r"-?\d{1,3}(,\d{3})+", s):
             s = s.replace(",", "")
         else:
             s = s.replace(".", "").replace(",", ".")
     else:
-        # sÃ³ ponto
+        # só ponto
         if re.fullmatch(r"-?\d{1,3}(\.\d{3})+", s):
             s = s.replace(".", "")
     try:
@@ -1032,7 +1032,7 @@ def _load_sales() -> tuple[list[dict], int]:
 
         sales.append(d)
 
-    # ordena (mais recente primeiro por padrÃ£o)
+    # ordena (mais recente primeiro por padrão)
     sales.sort(key=lambda x: x.get("created_at") or datetime.min, reverse=True)
 
     # se ajustou ids/formato, persiste list normalizada
@@ -1058,7 +1058,7 @@ def _reload_sales_from_disk():
 
 
 def _save_sales():
-    # salva SEM perder campos esperados pelo sales.html
+    # salva SEM perder campos esperados pelo management.html
     out = []
     for v in SALES:
         d = dict(v)
@@ -1460,12 +1460,12 @@ def save_settings():
 def data_export():
     """
     Exporta clientes + vendas no formato legado (data.json) usado pelo Settings.html.
-    Esse formato Ã© um bundle assinado (SSM_DATA_V1) para manter compatibilidade.
+    Esse formato é um bundle assinado (SSM_DATA_V1) para manter compatibilidade.
     """
     try:
         _bin_gc()
 
-        # Carrega do disco (para nÃ£o depender do estado em memÃ³ria)
+        # Carrega do disco (para não depender do estado em memória)
         clients = _load_clients_db()
         sales, _next_id = _load_sales()
         business = _load_business()
@@ -1571,7 +1571,7 @@ def data_import():
         if not isinstance(clients, list) or not isinstance(sales, list):
             return jsonify({"ok": False, "error": "Missing clients/sales"}), 400
 
-        # --- normalizaÃ§Ã£o leve (mantÃ©m compatibilidade com versÃµes antigas) ---
+        # --- normalização leve (mantém compatibilidade com versões antigas) ---
         clients_out = []
         for c in clients:
             if not isinstance(c, dict):
@@ -1630,7 +1630,7 @@ def data_import():
         if isinstance(business, dict):
             _save_business(business)
 
-        # recarrega estado em memÃ³ria e sincroniza contagens
+        # recarrega estado em memória e sincroniza contagens
         _reload_sales_from_disk()
         _sync_clients_db_from_sales()
 
@@ -1684,7 +1684,7 @@ def api_settings():
 
 @app.get("/business")
 def business():
-    # mantÃ©m as opÃ§Ãµes de anos sempre atualizadas (recarrega do disco)
+    # mantém as opções de anos sempre atualizadas (recarrega do disco)
     _reload_sales_from_disk()
 
     data = _load_business()
@@ -1926,11 +1926,11 @@ def post_new_sale():
 
 
 # --------------------------------------------------------------------------------------
-# SALES list (AGORA IGUAL AO CLIENTS: recarrega do disco em toda requisiÃ§Ã£o)
+# SALES list (AGORA IGUAL AO CLIENTS: recarrega do disco em toda requisição)
 # --------------------------------------------------------------------------------------
 @app.get("/sales")
 def list_sales():
-    # âœ… MESMO COMPORTAMENTO DO CLIENTS (snapshot sempre atual)
+    # ✅ MESMO COMPORTAMENTO DO CLIENTS (snapshot sempre atual)
     _reload_sales_from_disk()
 
     filters = _load_filters()
@@ -1959,7 +1959,7 @@ def list_sales():
 
     filtered = _apply_sales_filters(SALES, sf)
 
-    # >>> IMPORTANTE: NÃƒO renomear campos. O sales.html usa r.amount e r.final_amount.
+    # >>> IMPORTANTE: NÃO renomear campos. O management.html usa r.amount e r.final_amount.
     view = []
     for r in filtered:
         view.append({
@@ -2028,7 +2028,7 @@ def list_clients():
     _save_filters(filters)
 
     if cf.get("month") is not None or cf.get("year") is not None:
-        # (mantÃ©m coerÃªncia: garante SALES atualizado antes do recorte por perÃ­odo)
+        # (mantém coerência: garante SALES atualizado antes do recorte por período)
         _reload_sales_from_disk()
 
         sales_period = [
@@ -2122,7 +2122,7 @@ def delete_client(code: str):
     if len(SALES) != before:
         _save_sales()
 
-    # tambÃ©m remove do clients.json (cadastro)
+    # também remove do clients.json (cadastro)
     db = [c for c in _load_clients_db() if c.get("code") != code]
     _save_clients_db(db)
 
@@ -2133,8 +2133,8 @@ def delete_client(code: str):
 @app.post("/api/clients/delete_sales")
 def api_clients_delete_sales():
     """
-    Bulk delete (usado pelo clients.html):
-    remove todas as vendas associadas aos cÃ³digos informados e remove os clientes do cadastro.
+    Bulk delete (usado pelo management.html):
+    remove todas as vendas associadas aos códigos informados e remove os clientes do cadastro.
     """
     try:
         payload = request.get_json(silent=True) or {}
@@ -2153,7 +2153,7 @@ def api_clients_delete_sales():
 
         sset = set(clean)
 
-        # remove vendas (memÃ³ria + disco)
+        # remove vendas (memória + disco)
         global SALES
         before = len(SALES)
         SALES = [v for v in SALES if str(v.get("code", "") or "").strip() not in sset]
@@ -2365,7 +2365,7 @@ def clients_export_csv():
         b = sio.getvalue().encode("utf-8-sig")
 
         stamp = datetime.now().strftime("%Y-%m-%d_%Hh%M")
-        # Nome sugerido: localiza o "basename" (se existir em languages.py) mantendo o mesmo padrÃ£o de data/estrutura
+        # Nome sugerido: localiza o "basename" (se existir em languages.py) mantendo o mesmo padrão de data/estrutura
         _base_name = _t("clients_spreadsheet.csv")  # ex.: planilha_clientes.csv / planilla_clientes.csv
         _stem = _base_name[:-4] if _base_name.lower().endswith(".csv") else _base_name
         filename = f"{_stem}_{stamp}.csv"
@@ -2487,7 +2487,7 @@ def sales_export_csv():
         else:
             base = datetime.now().strftime("%Y-%m-%d_%Hh%M")
 
-        # Nome sugerido: localiza o "basename" (se existir em languages.py) mantendo o mesmo padrÃ£o de data/estrutura
+        # Nome sugerido: localiza o "basename" (se existir em languages.py) mantendo o mesmo padrão de data/estrutura
         _base_name = _t("sales_spreadsheet.csv")  # ex.: planilha_vendas.csv / planilla_ventas.csv
         _stem = _base_name[:-4] if _base_name.lower().endswith(".csv") else _base_name
         filename = f"{_stem}_{base}.csv"
@@ -2551,7 +2551,7 @@ def _receipt_filename_for_sale(sale: dict, sid: str) -> str:
         raw_prefix = _t("receipt")
     prefix = _slugify_short(raw_prefix, 16) or "receipt"
 
-    # sugestÃ£o curta baseada em dados (quando fizer sentido)
+    # sugestão curta baseada em dados (quando fizer sentido)
     code = _slugify_short(str(sid or ""), 18)
     name = _slugify_short(str(sale.get("name") or sale.get("client_name") or ""), 22)
 
@@ -2833,7 +2833,7 @@ def _render_one_receipt_pdf(
 @app.post("/receipt/<sid>")
 def receipt_single(sid: str):
     """
-    Gera PDF de recibo para uma venda especÃ­fica (usado pelo Sales -> Print receipt).
+    Gera PDF de recibo para uma venda específica (usado pelo Sales -> Print receipt).
     Retorna JSON com token + download_url.
     """
     try:

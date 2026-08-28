@@ -1,7 +1,8 @@
 /* app-common.js — shared desktop-bridge, popup and money helpers.
  * Loaded once by base.html on every page. Single source of truth for the
- * functions that used to be copy-pasted across clients.html/sales.html/
- * sale.html/searchbar.html (see management.html for the merged list view).
+ * functions that used to be copy-pasted across the old per-page templates
+ * (clients / sales / sale form / search bar), now all merged into
+ * management.html.
  */
 (function(){
   'use strict';
@@ -208,8 +209,8 @@
   }
 
   // Feedback claro de campo inválido (contorno vermelho + chacoalhada via .invalid,
-  // definido em base.html). Usado por sale.html e pela ferramenta de desconto
-  // do Editar de Venda em management.html.
+  // definido em base.html). Usado pelo formulário de Nova Venda e pela
+  // ferramenta de desconto do Editar de Venda em management.html.
   function flashInvalid(el){
     if(!el) return;
     el.setAttribute('aria-invalid','true');
@@ -227,8 +228,8 @@
   }
 
   // "Slime" — animação leve de entrada/saída (scale+opacity) para botões que
-  // trocam de estado (ex.: Discount <-> Alterar/Remover). Usada por sale.html
-  // e pela ferramenta de desconto do Editar de Venda em management.html.
+  // trocam de estado (ex.: Discount <-> Alterar/Remover). Usada pelo formulário
+  // de Nova Venda e pela ferramenta de desconto do Editar de Venda em management.html.
   function animateInSlime(el, opts){
     opts = opts || {duration:300};
     if(!el) return;

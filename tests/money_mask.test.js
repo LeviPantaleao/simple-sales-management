@@ -1,9 +1,10 @@
 // Testa o algoritmo da máscara de dinheiro estilo caixa eletrônico usada em
-// viewables/sale.html (funções moneyMaskCents/renderMoneyMask/enforceMoneyMask).
+// viewables/management.html (funções moneyMaskCents/renderMoneyMask/enforceMoneyMask,
+// definidas em viewables/app-common.js).
 // Roda com: node --test tests\money_mask.test.js
 //
 // Este arquivo replica a lógica pura (sem DOM) para poder testá-la fora do
-// Electron/navegador. Se o algoritmo em sale.html mudar, atualize aqui junto.
+// Electron/navegador. Se o algoritmo em app-common.js mudar, atualize aqui junto.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -58,7 +59,7 @@ test('respeita o teto máximo em vez de estourar/virar negativo', () => {
   assert.ok(cents > 0);
 });
 
-test('caracteres não numéricos são ignorados antes de entrar na máscara (equivalente ao replace(/[^\\d]/g, \'\') em sale.html)', () => {
+test('caracteres não numéricos são ignorados antes de entrar na máscara (equivalente ao replace(/[^\\d]/g, \'\') em app-common.js)', () => {
   const raw = '2,0a0-9 1';
   const digits = raw.replace(/[^\d]/g, '');
   assert.equal(digits, '20091');
