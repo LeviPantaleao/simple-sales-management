@@ -113,13 +113,16 @@
    * e caixas eletrônicos (ATM-style currency input). O valor "de verdade" fica guardado
    * em centavos inteiros em data-cents; o texto exibido é só formatação.
    */
-  const MONEY_MASK_MAX_CENTS = 999999999999; // teto generoso (até 9.999.999.999,99)
+  // Arithmetic (clampCents/sanitizeDigits/pushDigits/popDigit e o teto
+  // MONEY_MASK_MAX_CENTS) vem de money-mask.js, carregado antes deste arquivo
+  // no base.html. Aqui só a ponte com o DOM (data-cents, texto, eventos).
+  const _mm = (typeof window !== 'undefined' && window.MoneyMask) ? window.MoneyMask : null;
 
   function moneyMaskCents(el){ return Number(el && el.dataset ? el.dataset.cents : 0) || 0; }
   function moneyMaskValue(el){ return moneyMaskCents(el) / 100; }
 
   function renderMoneyMask(el, cents){
-    cents = Math.max(0, Math.min(MONEY_MASK_MAX_CENTS, Math.round(cents) || 0));
+    cents = _mm.clampCents(cents);
     el.dataset.cents = String(cents);
     el.value = cents > 0 ? toMoneyRaw(cents / 100) : '';
     try{ el.setSelectionRange(el.value.length, el.value.length); }catch(_){}
@@ -148,13 +151,11 @@
     }
 
     function pushDigits(digitsStr){
-      let cur = moneyMaskCents(el);
-      for(const ch of digitsStr) cur = Math.min(MONEY_MASK_MAX_CENTS, cur*10 + Number(ch));
-      renderMoneyMask(el, cur);
+      renderMoneyMask(el, _mm.pushDigits(moneyMaskCents(el), digitsStr));
       el.dispatchEvent(new Event('input', { bubbles:true }));
     }
     function popDigit(){
-      renderMoneyMask(el, Math.trunc(moneyMaskCents(el) / 10));
+      renderMoneyMask(el, _mm.popDigit(moneyMaskCents(el)));
       el.dispatchEvent(new Event('input', { bubbles:true }));
     }
 
@@ -171,7 +172,7 @@
       const data = e.data;
       if(data == null){ e.preventDefault(); return; }
 
-      const digits = data.replace(/[^\d]/g,'');
+      const digits = _mm.sanitizeDigits(data);
       e.preventDefault();
       if(!digits){ flashInvalidKeepValue(); return; }
       pushDigits(digits);
@@ -198,7 +199,7 @@
       if(el.hasAttribute('readonly')) return;
       e.preventDefault();
       const txt = (e.clipboardData || window.clipboardData)?.getData('text') || '';
-      const digits = txt.replace(/[^\d]/g,'');
+      const digits = _mm.sanitizeDigits(txt);
       if(!digits){ flashInvalidKeepValue(); return; }
       pushDigits(digits);
     });

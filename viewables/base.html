@@ -22,6 +22,8 @@
   <title>{% block title %}{{ _page_title }}{% endblock %}</title>
 
   <!-- Shared helpers (desktop bridge, popup/lock mechanics, money format) -->
+  <!-- money-mask.js first: app-common.js reads window.MoneyMask from it -->
+  <script src="{{ url_for('money_mask_js') }}"></script>
   <script src="{{ url_for('app_common_js') }}"></script>
 
   <!-- Boot: nav fade (popups suaves), sidebar state, theme initial (anti-flash) -->

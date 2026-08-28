@@ -13,9 +13,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.editorconfig`, aligned with the line-ending rules already declared in
   `.gitattributes` (LF for `.py`/`.js`/`.html`/`.json`/`.md`/`.txt`/`.spec`,
   CRLF for `.ps1`/`.iss`).
+- `viewables/money-mask.js`: the pure "ATM-style" currency arithmetic
+  (`clampCents`, `sanitizeDigits`, `pushDigits`, `popDigit`) extracted into
+  one file that works both as a browser global (`window.MoneyMask`) and as a
+  Node module (`module.exports`). Served at `/assets/money-mask.js` and loaded
+  by `base.html` before `app-common.js`.
+- `tests/test_server.py`: pytest coverage for `_parse_money_any`,
+  `_verify_bundle` (valid / tampered payload / tampered MAC / wrong key id /
+  malformed / non-dict), `_save_json` (atomic write, no leftover `.tmp`,
+  failure leaves the original intact), `_slugify_short` and
+  `_receipt_filename_for_sale`.
+- `tests/conftest.py` and `pytest.ini`: hermetic setup that redirects
+  `SSM_CONFIG_DIR` / `APP_DATA_DIR` to a temp directory before importing
+  `server`, so the suite never reads or writes real business data.
+- `requirements-dev.txt` pinning `pytest==9.1.1`.
 
 ### Changed
 
+- `viewables/app-common.js` no longer carries its own copy of the money
+  arithmetic; `enforceMoneyMask` / `renderMoneyMask` now delegate to
+  `window.MoneyMask` from `money-mask.js`.
+- `tests/money_mask.test.js` now imports the real functions from
+  `viewables/money-mask.js` instead of re-implementing them, so a change to
+  the algorithm actually breaks the test. The existing cases are kept and a
+  few (`sanitizeDigits` edge cases, `clampCents` rounding/clamping) were
+  added.
 - `requirements.txt` now pins every direct dependency to an exact version
   (`flask==3.1.3`, `flask-babel==4.0.0`, `babel==2.18.0`, `pillow==12.3.0`,
   `fpdf2==2.8.7`, `pyinstaller==6.21.0`) so a build is reproducible.

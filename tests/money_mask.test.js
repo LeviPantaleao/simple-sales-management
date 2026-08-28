@@ -1,26 +1,23 @@
 // Testa o algoritmo da máscara de dinheiro estilo caixa eletrônico usada em
-// viewables/management.html (funções moneyMaskCents/renderMoneyMask/enforceMoneyMask,
-// definidas em viewables/app-common.js).
-// Roda com: node --test tests\money_mask.test.js
+// viewables/management.html. As funções puras (pushDigits/popDigit/
+// sanitizeDigits/clampCents) vivem em viewables/money-mask.js e são as MESMAS
+// que o app carrega no navegador/Electron — aqui elas são importadas, não
+// recopiadas, então o teste quebra de verdade se o algoritmo mudar.
 //
-// Este arquivo replica a lógica pura (sem DOM) para poder testá-la fora do
-// Electron/navegador. Se o algoritmo em app-common.js mudar, atualize aqui junto.
+// Roda com: node --test tests\money_mask.test.js
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const MONEY_MASK_MAX_CENTS = 999999999999;
+const {
+  MONEY_MASK_MAX_CENTS,
+  clampCents,
+  sanitizeDigits,
+  pushDigits,
+  popDigit,
+} = require('../viewables/money-mask.js');
 
-function pushDigits(cents, digitsStr) {
-  let cur = cents;
-  for (const ch of digitsStr) cur = Math.min(MONEY_MASK_MAX_CENTS, cur * 10 + Number(ch));
-  return cur;
-}
-
-function popDigit(cents) {
-  return Math.trunc(cents / 10);
-}
-
+// Helper só do teste: centavos inteiros -> "R$ cru" com 2 casas.
 function formatCents(cents) {
   return (cents / 100).toFixed(2);
 }
@@ -59,9 +56,26 @@ test('respeita o teto máximo em vez de estourar/virar negativo', () => {
   assert.ok(cents > 0);
 });
 
-test('caracteres não numéricos são ignorados antes de entrar na máscara (equivalente ao replace(/[^\\d]/g, \'\') em app-common.js)', () => {
+test('caracteres não numéricos são ignorados antes de entrar na máscara', () => {
   const raw = '2,0a0-9 1';
-  const digits = raw.replace(/[^\d]/g, '');
+  const digits = sanitizeDigits(raw);
   assert.equal(digits, '20091');
   assert.equal(formatCents(pushDigits(0, digits)), '200.91');
+  // pushDigits também sanitiza internamente, então o texto cru chega ao mesmo lugar.
+  assert.equal(pushDigits(0, raw), pushDigits(0, digits));
+});
+
+test('sanitizeDigits lida com null/undefined/vazio sem quebrar', () => {
+  assert.equal(sanitizeDigits(null), '');
+  assert.equal(sanitizeDigits(undefined), '');
+  assert.equal(sanitizeDigits(''), '');
+  assert.equal(sanitizeDigits('R$ 1.234,56'), '123456');
+});
+
+test('clampCents arredonda e prende no intervalo [0, MAX]', () => {
+  assert.equal(clampCents(-5), 0);
+  assert.equal(clampCents(10.4), 10);
+  assert.equal(clampCents(10.5), 11);
+  assert.equal(clampCents(NaN), 0);
+  assert.equal(clampCents(MONEY_MASK_MAX_CENTS + 1000), MONEY_MASK_MAX_CENTS);
 });

@@ -413,6 +413,13 @@ def app_common_js():
     return resp
 
 
+@app.get("/assets/money-mask.js")
+def money_mask_js():
+    resp = make_response(send_from_directory(TEMPLATES_DIR, "money-mask.js"))
+    resp.headers["Content-Type"] = "application/javascript; charset=utf-8"
+    return resp
+
+
 @app.get("/download/<token>")
 def download_token(token: str):
     _bin_gc()

@@ -14,6 +14,9 @@ installer_output/
 __pycache__/
 *.py[cod]
 
+# Cache do pytest
+.pytest_cache/
+
 # Dados reais do negocio - NUNCA versionar
 data/
 *.db

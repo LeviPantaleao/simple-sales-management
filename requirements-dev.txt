@@ -1,0 +1,4 @@
+# Development- and CI-only dependencies (not shipped in the app).
+# Install alongside the runtime deps:
+#   pip install -r requirements.txt -r requirements-dev.txt
+pytest==9.1.1
