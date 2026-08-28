@@ -1,8 +1,7 @@
 {
   "name": "ssm",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Simple Sales Management - offline Windows desktop app for clients, sales and 58mm thermal PDF receipts",
-  "main": "index.js",
   "scripts": {
     "test": "node --test tests/money_mask.test.js"
   },

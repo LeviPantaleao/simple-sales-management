@@ -1,0 +1,28 @@
+# EditorConfig — https://editorconfig.org
+# Line-ending rules mirror .gitattributes: LF for source and text, CRLF for
+# the Windows-only build scripts (.ps1) and the Inno Setup installer (.iss).
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+[*.py]
+indent_size = 4
+
+[*.{ps1,iss}]
+end_of_line = crlf
+
+# Markdown: trailing spaces are a significant hard line break.
+[*.md]
+trim_trailing_whitespace = false
+
+# Binary assets (matches the `binary` entries in .gitattributes).
+[*.{ico,exe,png,mo}]
+charset = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset

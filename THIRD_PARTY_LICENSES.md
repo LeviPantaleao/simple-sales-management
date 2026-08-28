@@ -7,9 +7,12 @@ remains under its own license. This document inventories those components.
 The lists below are derived from [`requirements.txt`](requirements.txt),
 the installed Python environment, [`package.json`](package.json), and
 [`package-lock.json`](package-lock.json) at the time of writing. Version
-numbers reflect the versions resolved in the development environment used to
-produce the current build; `requirements.txt` itself pins no versions, so a
-fresh `pip install` may resolve newer releases.
+numbers reflect the versions used to produce the current build.
+[`requirements.txt`](requirements.txt) pins each direct dependency to an
+exact version (`==`), so a fresh `pip install -r requirements.txt`
+reproduces the same direct set. Transitive dependencies are not pinned
+there; the versions listed for them are those resolved in the development
+environment and a fresh install may resolve newer releases.
 
 Full, verbatim license texts for the copyleft dependencies are kept in the
 [`LICENSES/`](LICENSES/) directory. Permissive licenses (MIT, BSD, ISC,
@@ -25,7 +28,7 @@ its dependencies. It is not legal advice.
 
 ### Declared in `requirements.txt`
 
-| Package      | Version (resolved) | License                                            | Shipped in the installed app? |
+| Package      | Version (pinned)   | License                                            | Shipped in the installed app? |
 |--------------|--------------------|----------------------------------------------------|-------------------------------|
 | Flask        | 3.1.3              | BSD-3-Clause                                        | Yes (frozen into the executable) |
 | Flask-Babel  | 4.0.0              | BSD-3-Clause                                        | Yes |
