@@ -1,0 +1,4690 @@
+{% extends "base.html" %}
+{% block title %}{{ _('New Sale') if mode == 'sale' else (_('Sales') if mode == 'sales' else _('Clients')) }}{% endblock %}
+
+{% block head %}
+{% if mode == 'sale' %}
+<style>
+:root{
+  --radius: 10px;
+  --radius-sm: 10px;
+  --radius-pill: 999px;
+  --ink-strong: color-mix(in srgb, var(--text) 86%, #121518);
+  --muted-ink: color-mix(in srgb, var(--text) 64%, #121518);
+  --surface-subtle: color-mix(in srgb, var(--card) 94%, #121518);
+}
+
+/* [hidden]{display:none!important} vem de base.html (evita duplicação) */
+
+/* =========================================================
+   ✅ SCROLLBAR GUTTER (somente nesta página)
+   - Mantém a calha do scrollbar SEMPRE reservada (sem “pulo” do fundo)
+   - Quando abrir o clientPicker:
+       • calha continua reservada (gutter invisível)
+       • thumb/track ficam transparentes
+       • evita scroll “vazar” para o fundo
+   ========================================================= */
+#appScroller{ scrollbar-gutter: stable; }
+
+/* Quando o picker estiver aberto, NÃO mexa no gutter; apenas “invisibilize” o scrollbar */
+html.picker-open #appScroller{
+  overscroll-behavior: none;
+  scrollbar-color: transparent transparent !important; /* Firefox */
+}
+
+/* WebKit/Chromium/Electron: mantém largura do scrollbar, mas invisível */
+html.picker-open #appScroller::-webkit-scrollbar{ width:10px !important; height:10px !important; }
+html.picker-open #appScroller::-webkit-scrollbar-thumb{
+  background:transparent !important;
+  border:0 !important;
+}
+html.picker-open #appScroller::-webkit-scrollbar-track{ background:transparent !important; }
+html.picker-open #appScroller::-webkit-scrollbar-corner{ background:transparent !important; }
+
+/* ===================== PAGE ===================== */
+.page-shell{
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 0;
+  min-width:0;
+}
+/* ===== Agrupadores ===== */
+.legend{
+  font-weight:900;
+  margin-bottom:14px;
+  padding-bottom:10px;
+  letter-spacing:.25px;
+  color:var(--ink-strong);
+  border-bottom:1px solid var(--border);
+}
+
+/* ===== Grids ===== */
+.grid{
+  display:grid;
+  grid-template-columns: minmax(0,1fr) 320px;
+  gap:14px;
+  align-items:start;
+  min-width:0;
+}
+@media (max-width:860px){
+  .grid{ grid-template-columns:1fr; }
+}
+
+/* Override específico para a seção SALE */
+.sale-grid{ grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+@media (max-width:720px){
+  .sale-grid{ grid-template-columns:1fr; }
+}
+
+.field{ display:flex; flex-direction:column; min-width:0; }
+
+/* ---------- Rótulos alinhados ---------- */
+:root{ --label-row-h: 36px; }
+.field-label-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:8px 10px;
+  min-height:var(--label-row-h);
+  margin-bottom:8px;
+  min-width:0;
+}
+label{
+  font-size:.92rem;
+  color:var(--muted-ink);
+  font-weight:700;
+  letter-spacing:.2px;
+  min-width:0;
+}
+/* ✅ Dentro da linha de rótulo (rótulo + botão de desconto), o rótulo NÃO
+   pode encolher abaixo do próprio texto — senão o texto some atrás do botão
+   em vez de a linha quebrar. */
+.field-label-row label{
+  min-width:max-content;
+  white-space:nowrap;
+  flex:0 0 auto;
+}
+
+/* Inputs */
+input[type="text"], textarea{
+  padding:11px 13px;
+  border:1px solid var(--border);
+  border-radius:8px;
+  background:var(--surface-subtle);
+  color:var(--ink-strong);
+  outline:0;
+  min-height:42px;
+  transition:border-color .16s ease, box-shadow .16s ease, background .16s ease, color .16s ease;
+  font-weight:400;
+  width:100%;
+  min-width:0;
+}
+input.half[type="text"]{ min-height:42px; }
+textarea{ min-height:110px; max-height:60vh; resize:none; field-sizing:content }
+/* :focus (box-shadow do accent) vem de base.html (evita duplicação) */
+
+/* .invalid/@keyframes inputShake vêm de base.html (evita duplicação) */
+
+/* Botões / ações */
+/* ✅ Fluxo normal (sem position:absolute com largura fixa): evita que o botão
+   "Adicionar desconto" (ou seu equivalente em outros idiomas, que pode ser
+   mais longo que o inglês) sobreponha o rótulo "Valor/Amount" quando não
+   houver espaço suficiente — em vez disso, a linha quebra para a 2ª linha. */
+.client-actions{
+  min-height:var(--label-row-h);
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  flex:0 0 auto;
+  margin-left:auto;
+}
+.client-actions > .btn, .client-actions > .pair{
+  display:flex; gap:8px; align-items:center;
+  white-space:nowrap;
+}
+
+/* ✅ Em janelas mais estreitas (não maximizadas), o botão de desconto fica
+   mais compacto e as colunas Produto/Valor se reequilibram — evita que o
+   botão precise quebrar linha e empurrar o campo de valor para baixo.
+   Em tela cheia/larga, tudo mantém o tamanho original. */
+@media (max-width: 900px) and (min-width: 721px){
+  .sale-grid{ grid-template-columns: minmax(0,0.85fr) minmax(0,1.15fr); }
+}
+@media (max-width: 900px){
+  .field-label-row{ gap:6px 8px; }
+  .client-actions .btn{
+    font-size:.76rem;
+    padding:5px 8px;
+    min-height:28px;
+    letter-spacing:.1px;
+  }
+}
+
+/* Botões genéricos */
+.btn{
+  appearance:none;
+  border:1px solid var(--border);
+  background:var(--card);
+  color:var(--text);
+  font-weight:700;
+  padding:8px 12px;
+  border-radius:8px;
+  cursor:pointer;
+  line-height:1;
+  min-height:36px;
+  text-decoration:none;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  max-width:100%;
+  transition:background .15s ease, border-color .15s ease, box-shadow .15s ease, opacity .15s ease, transform .08s ease;
+}
+.btn:hover{ background:color-mix(in srgb, var(--text) 6%, var(--card)) }
+.btn:active{ transform:translateY(1px) }
+.btn-danger{ color:color-mix(in srgb, var(--danger, #c74848) 90%, #2b0b0b) }
+
+@media (max-width:420px){
+  .btn{ padding:8px 10px; min-height:34px; border-radius:8px; }
+}
+
+/* Botão principal: .actions/.primary/.primary.icon-only vêm de base.html (evita duplicação) */
+
+/* Estado travado (azul) */
+.locked{
+  background:color-mix(in srgb, var(--accent) 10%, var(--card)) !important;
+  border-color:color-mix(in srgb, var(--accent) 45%, var(--border)) !important;
+  color:color-mix(in srgb, var(--accent) 75%, #121518) !important;
+  cursor:not-allowed;
+  caret-color: transparent;
+}
+.locked::placeholder{ color:color-mix(in srgb, var(--accent) 50%, #121518) }
+
+/* .input-wrap + ações de desconto: componente em base.html. Aqui só a
+   moldura do overlay do valor riscado e o padding-right do input. */
+
+/* Overlay: FINAL + OLD no MESMO Y */
+.amount-overlay{
+  position:absolute;
+  inset:0;
+  display:flex;
+  opacity:0;
+  align-items:center;
+  justify-content:flex-start;
+  pointer-events:none;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  padding-left:13px;
+  padding-right:13px;
+  color:var(--ink-strong);
+  transition:opacity .16s ease;
+}
+.input-wrap.show-overlay .amount-overlay{ opacity:1; }
+.input-wrap.show-overlay input[type="text"]{
+  color:transparent !important;
+  text-shadow:none !important;
+}
+.amount-final{
+  font-variant-numeric: tabular-nums;
+  color:var(--ink-strong);
+  font-weight:700;
+}
+.amount-space{ white-space:pre; }
+.amount-old{
+  color:var(--muted-ink);
+  font-weight:700;
+  font-size:0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+.old-price{ display:none !important; }
+
+/* reserva à direita pros botões de desconto (o resto do componente
+   .input-wrap > .client-actions vem de base.html) */
+.input-wrap input[type="text"]{ padding-right: calc(13px + var(--disc-reserve)); }
+.input-wrap .amount-overlay{ padding-right: calc(13px + var(--disc-reserve)); }
+
+/* ===================== POPUP (Select/Register Client) =====================
+   .picker-backdrop/.picker-sheet/.picker-header/.picker-title/.picker-body
+   vêm de base.html (compartilhado com management.html). Só o tom do título
+   é um pouco mais forte nesta página (--ink-strong). */
+.picker-title{ color:var(--ink-strong); }
+
+.picker-search{
+  padding:12px 16px;
+  border-bottom:1px solid var(--border);
+  background:var(--card);
+}
+
+/* ✅ Popup de Cliente ancorado pelo TOPO (não centralizado em Y): a lista
+   e o "Cadastrar cliente" começam exatamente na mesma posição; a lista só
+   cresce pra baixo e usa a própria scrollbar. Antes, como o sheet era
+   centralizado, trocar de modo mudava a altura em torno do centro e o
+   popup inteiro "pulava". A troca de altura entre os modos é animada
+   (transition:height, dirigida pelo JS em animateSheetHeight). */
+#clientPicker .picker-sheet{
+  top: max(24px, 10vh);
+  max-height: 86vh;
+  transform: translateX(-50%) scale(.99);
+  transition:
+    transform 180ms cubic-bezier(.22,.61,.36,1),
+    opacity   180ms cubic-bezier(.22,.61,.36,1),
+    height    240ms cubic-bezier(.22,.61,.36,1);
+}
+#clientPicker.picker-backdrop.open .picker-sheet{
+  transform: translateX(-50%) scale(1);
+}
+@media (max-height:640px){
+  #clientPicker.picker-backdrop.open .picker-sheet{
+    transform:translateX(-50%) scale(1);
+    top:16px; max-height:calc(100vh - 32px);
+  }
+}
+
+/* ✅ Botão "voltar" (<) + título: em vez de aparecer/sumir no corte, o "<"
+   abre da esquerda (largura + opacidade) e o "Cliente" desliza pra direita
+   junto, abrindo espaço pro botão. */
+#clientPicker .picker-header{ gap:0; }
+#clientPicker #pickerBackBtn{
+  width:0; margin-right:0;
+  opacity:0; pointer-events:none;
+  overflow:hidden;
+  transform:translateX(-4px);
+  transition:width 220ms cubic-bezier(.22,.61,.36,1),
+             margin-right 220ms cubic-bezier(.22,.61,.36,1),
+             opacity 180ms ease,
+             transform 220ms cubic-bezier(.22,.61,.36,1);
+}
+#clientPicker .picker-header.show-back #pickerBackBtn{
+  width:30px; margin-right:12px;
+  opacity:1; pointer-events:auto;
+  transform:translateX(0);
+}
+
+/* ✅ crossfade das etapas mais suave (sobe levemente ao entrar, em vez de
+   só piscar a opacidade) */
+#pickerSearch:not([hidden]),
+#selectMode:not([hidden]),
+#registerMode:not([hidden]){
+  animation: pickerModeFadeIn 220ms cubic-bezier(.22,.61,.36,1);
+}
+@keyframes pickerModeFadeIn{
+  from{ opacity:0; transform:translateY(6px); }
+  to  { opacity:1; transform:translateY(0); }
+}
+@media (prefers-reduced-motion: reduce){
+  #pickerSearch, #selectMode, #registerMode{ animation:none!important; }
+  #clientPicker .picker-sheet,
+  #clientPicker #pickerBackBtn{ transition:none!important; }
+}
+.picker-search-row{
+  display:flex; align-items:center; gap:10px;
+  padding:4px 0;
+  /* ✅ sem caixa em volta da busca: nada de borda/fundo/raio — o ícone e
+     o campo ficam soltos na faixa .picker-search (que já tem seu
+     border-bottom separando da lista). */
+  border:0;
+  background:transparent;
+}
+.picker-search-ico{
+  width:18px; height:18px; flex:0 0 auto;
+  color:var(--muted-ink); opacity:.95;
+}
+.picker-search-input{
+  width:100%;
+  border:0;
+  outline:0;
+  background:transparent;
+  color:var(--ink-strong);
+  font-weight:600;
+  font-size:.95rem;
+  padding:0;
+  min-width:0;
+}
+.picker-search-input::placeholder{ color:var(--muted-ink); font-weight:600; opacity:.9; }
+
+/* ✅ Sem realce de foco na busca: sem outline/anel/box-shadow ao focar. */
+.picker-search-input:focus,
+.picker-search-input:focus-visible{
+  outline: none;
+  box-shadow: none;
+  border-color: transparent;
+}
+
+/* .picker-body vem de base.html — este popup usa a variante .scroll (rola) */
+@media (max-height: 460px){
+  .picker-search{ padding:8px 12px; }
+}
+
+.client-list{ display:grid; grid-template-columns:1fr; gap:8px }
+.client-item{
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:12px 14px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:6px 12px;
+  background:var(--card);
+  cursor:pointer;
+  transition:transform .12s ease, opacity .14s ease, background .14s ease;
+  will-change:transform,opacity;
+  min-width:0;
+}
+.client-item:hover{ background:color-mix(in srgb, var(--text) 4%, var(--card)) }
+.client-item:active{ transform:translateY(1px) }
+.client-item .meta{ display:flex; flex-direction:column; gap:4px; min-width:0 }
+.client-item .name{ font-weight:900; color:var(--ink-strong); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.client-item .addr,.client-item .cont{ font-size:.88rem; color:var(--muted-ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.empty-hint{ padding:12px 14px; border:1px dashed var(--border); border-radius:8px; color:var(--muted-ink); background:var(--surface-subtle) }
+
+/* Top card: New client */
+.client-item.add-new{
+  border-style:dashed;
+  background:color-mix(in srgb, var(--accent) 7%, var(--card));
+}
+.client-item.add-new .name{ color:var(--paper); }
+.client-item.add-new .cont,
+.client-item.add-new .addr{ color:color-mix(in srgb, var(--paper) 70%, transparent); }
+
+/* Header button (X / Back arrow) */
+.icon-btn{
+  --s:30px;
+  position:relative;
+  width:var(--s);
+  height:var(--s);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  background:transparent;
+  border:none;
+  cursor:pointer;
+  color:var(--muted, var(--muted-ink));
+  border-radius:8px;
+  transition: background .18s ease, color .18s ease, transform .06s ease;
+}
+.icon-btn:hover{
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text);
+}
+.icon-btn:active{ transform: translateY(1px); }
+
+.icon-x::before,
+.icon-x::after{
+  content:"";
+  position:absolute;
+  width:14px;
+  height:2px;
+  background: currentColor;
+  border-radius:2px;
+  opacity:.95;
+}
+.icon-x::before{ transform: rotate(45deg); }
+.icon-x::after { transform: rotate(-45deg); }
+
+.icon-back::before{
+  content:"";
+  position:absolute;
+  width:10px;
+  height:10px;
+  border-left:2px solid currentColor;
+  border-bottom:2px solid currentColor;
+  transform: rotate(45deg);
+  left:10px;
+}
+
+/* ✅ header do picker: "<" (voltar) surge à esquerda do título só no
+   modo Cadastrar; o "X" (fechar) fica sempre à direita, empurrado pra
+   ponta mesmo quando o "<" aparece. */
+.picker-header #pickerHeaderBtn{ margin-left:auto; }
+
+/* Register form */
+.reg-wrap{ display:grid; gap:12px; }
+.reg-actions{
+  display:flex;
+  gap:10px;
+  justify-content:flex-end;
+  /* ✅ separador acima dos botões, igual ao topo do popup e ao padrão
+     .actions/.picker-actions do resto do programa */
+  padding-top:14px;
+  border-top:1px solid var(--border);
+}
+
+/* ===================== POPUP (Discount) =====================
+   Usa os primitivos .picker-backdrop / .picker-sheet / .popup-header /
+   .popup-title / .popup-close / .picker-body / .picker-actions do
+   base.html — idêntico ao popup de Desconto do "Editar venda"
+   (#sDiscPopup). Só o z-index e a largura (inline no <section>) são
+   locais. Antes isto era um modal .disc-* recriado do zero. */
+#discPopup{ z-index:1003; }
+</style>
+{% else %}
+<style>
+/* ===== Busca + filtros ===== */
+.controls{display:grid;gap:10px;margin-bottom:10px}
+.filters .chiprow{display:flex;gap:6px;flex-wrap:wrap}
+/* .chip/.chip.active vêm de base.html (evita duplicação) */
+
+/* ===== Subtotais ===== */
+.subtotals{display:flex;gap:18px;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:12px}
+
+/* ===== Lista (cards) ===== */
+.list{display:flex;flex-direction:column;gap:10px}
+.card.empty-state{
+  display:flex; align-items:center; justify-content:center;
+  text-align:center; padding:34px 20px; min-height:96px;
+  color:var(--muted, #8a94a6); font-weight:600;
+  border-style:dashed;
+}
+.card.empty-state .who{ color:inherit; font-weight:600; }
+.card{
+  border:1px solid var(--border);background:var(--card);border-radius:10px;
+  padding:16px 18px;box-shadow:var(--shadow);display:grid;
+  grid-template-columns:1fr auto;gap:6px 16px;align-items:center;cursor:pointer;
+  position:relative; will-change: transform;
+  transition:box-shadow .15s ease,border-color .15s ease,background-color .18s ease,opacity .12s ease,transform .12s ease;
+}
+.card > *{ min-width:0; }
+.card:hover{box-shadow:var(--shadow-strong)}
+/* ✅ filtro da busca: esmaece em vez de sumir no corte; só sai do layout
+   (display:none) depois que a transição termina, via .hide-done (JS) */
+.card.hidden{ opacity:0; transform:scale(.98); pointer-events:none; }
+.card.hidden.hide-done{ display:none!important; }
+@media (prefers-reduced-motion: reduce){
+  .card{ transition:none!important; }
+}
+.card .who{font-weight:800}
+.card .who,.card .desc,.card .when{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .desc{grid-column:1/-1;color:var(--muted)}
+.card .when{opacity:.9}
+.card .val{font-weight:800}
+.card .count{font-weight:800}
+
+/* Tap */
+@keyframes cardTap {
+  0%   { transform: scale(1); box-shadow: var(--shadow); background: var(--card); }
+  40%  { transform: scale(.995); box-shadow: var(--shadow-strong); background: color-mix(in srgb, var(--accent) 6%, var(--card)); }
+  100% { transform: scale(1); box-shadow: var(--shadow); background: var(--card); }
+}
+.card.tapped{ animation: cardTap 160ms ease; }
+
+/* Bulk */
+.bulk-on .card{ user-select:none; -webkit-user-select:none; }
+.bulk-on .card.is-selected{
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: var(--shadow);
+  background: color-mix(in srgb, var(--accent) 6%, var(--card));
+}
+.card .select{display:none}
+
+/* checkbox quadrada com cantos arredondados; mesmo elemento (outline sempre neutra),
+   só o miolo pinta na cor do accent quando marcada (sem ícone) */
+.row-check,.bulk-check{
+  width:22px;height:22px;margin:0;appearance:none;border:2px solid var(--border);
+  border-radius:6px;background:transparent;position:relative;cursor:pointer;
+  transition:background .15s ease;
+}
+.row-check:checked,.bulk-check:checked{background:var(--accent)}
+
+/* ===== Voltar ao topo: centralizado como um hint, levemente transparente;
+   fica oculto se algum hint (edit/print/csv/delete) ou o bulk estiver ativo ===== */
+.scroll-top-btn{
+  --s:44px;
+  position:fixed; left:50%; bottom:max(16px,env(safe-area-inset-bottom)); z-index:1500;
+  width:var(--s); height:var(--s);
+  display:inline-flex; align-items:center; justify-content:center;
+  padding:0; appearance:none;
+  border:1px solid var(--border); border-radius:10px;
+  background:var(--card); color:var(--text);
+  cursor:pointer;
+  opacity:0; transform:translate(-50%,6px); pointer-events:none;
+  transition:opacity .18s ease, transform .18s ease, background .15s ease, border-color .15s ease;
+}
+.scroll-top-btn.show{ opacity:.82; transform:translate(-50%,0); pointer-events:auto; }
+.scroll-top-btn.show:hover{ opacity:1; background:var(--hover-bg); }
+.scroll-top-btn:active{ transform:translate(-50%,1px); }
+.scroll-top-btn svg{ width:20px; height:20px; display:block; }
+@media (prefers-reduced-motion: reduce){
+  .scroll-top-btn{ transition:opacity .01s linear; transform:translate(-50%,0)!important; }
+}
+
+/* ===== Bulk panel ===== */
+.bulk-panel{
+  /* ✅ centralizado sobre a LISTA (mesma lógica do botão voltar ao topo):
+     "left" é ajustado via JS, "translate" cuida do -50% horizontal (fica
+     livre do "transform", usado aqui só pro deslize vertical de entrada) */
+  position:fixed;left:50%;translate:-50% 0;bottom:22px;
+  background:color-mix(in srgb, var(--card) 70%, transparent);
+  backdrop-filter:saturate(120%) blur(4px);
+  border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-strong);
+  display:flex;align-items:center;gap:14px;padding:8px 14px;z-index:3100;
+  opacity:0;pointer-events:none;transform:translateY(10px);
+  transition:opacity .18s ease, transform .18s ease;
+}
+.bulk-on .bulk-panel{opacity:1;pointer-events:auto;transform:translateY(0)}
+@media (prefers-reduced-motion: reduce){
+  .bulk-panel{ transition:none!important; }
+}
+.bulk-panel .count{font-weight:800;min-width:1.5ch;text-align:right}
+.bulk-panel button{border:0;border-radius:10px;padding:8px 12px;cursor:pointer}
+.bulk-panel .primary{background:var(--accent);color:var(--paper)}
+.bulk-panel .ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+.bulk-panel .all{display:flex;flex-direction:column;align-items:center;gap:6px;margin-right:4px}
+.bulk-panel .all span{font-size:.85rem;color:var(--text)}
+.bulk-panel button.icon-only{padding:9px;display:inline-flex;align-items:center;justify-content:center;line-height:0}
+.bulk-panel button.icon-only svg{width:18px;height:18px;display:block}
+
+/* ===== Botões (coeso com o restante) ===== */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  gap:8px;
+  min-height:42px;
+  padding:10px 14px;
+  border-radius:8px;
+  border:1px solid var(--border);
+  background:transparent;
+  color:var(--text);
+  cursor:pointer;
+  font-weight:800;
+  box-shadow:none;
+  -webkit-tap-highlight-color:transparent;
+  transition:background .15s ease, border-color .15s ease, box-shadow .15s ease, opacity .15s ease, transform .08s ease;
+}
+.btn:hover{ box-shadow: var(--shadow); }
+.btn:active{ transform: translateY(1px); }
+.btn.primary{ background:var(--accent); color:var(--paper); border:0; }
+.btn.ghost{ background:transparent; border:1px solid var(--border); }
+.btn:disabled{ opacity:.55; cursor:not-allowed; transform:none; box-shadow:none; }
+
+/* ===== Ticket (recibo, usado só no modo sales) ===== */
+.ticket{width:58mm;min-height:210mm;border:1px dashed var(--border);border-radius:6px;padding:6px;background:var(--card);margin-inline:auto}
+.ticket .ticket-top{position:relative;min-height:10mm;margin-bottom:6px}
+/* ✅ inserir/limpar imagem do recibo: fade leve em vez de aparecer no corte */
+#ticketImg, #ticketImgDrop, #btnInsert, #btnClear{ animation:ticketFadeIn 160ms ease; }
+@keyframes ticketFadeIn{ from{ opacity:0; } to{ opacity:1; } }
+@media (prefers-reduced-motion: reduce){
+  #ticketImg, #ticketImgDrop, #btnInsert, #btnClear{ animation:none!important; }
+}
+
+/* ✅ ícone placeholder (mesmo desenho do usado em Business/Welcome para o
+   logo) exibido quando o recibo ainda não tem imagem */
+.ticket-img-drop{
+  width:100%; aspect-ratio:1/1; max-height:34vh;
+  border:1px dashed var(--border); border-radius:8px; background:var(--card);
+  display:grid; place-items:center;
+}
+.ticket-img-drop svg{ width:34%; height:34%; color:var(--icon); opacity:.55; }
+
+/* ✅ selo circular no canto inferior direito da imagem — usado tanto pelo
+   botão "Adicionar" (ícone +) quanto "Remover" (ícone x); os dois nunca
+   ficam visíveis ao mesmo tempo, então dividem a mesma posição/forma/cor
+   (idêntico ao .logo-corner-btn de Business/Welcome — sem vermelho). */
+.img-ctl{
+  --s:30px;
+  appearance:none;
+  position:absolute;
+  right:6px; bottom:6px;
+  z-index:1;
+  height:var(--s);
+  padding:0 10px;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  background:color-mix(in srgb, var(--card) 78%, transparent);
+  border:1px solid var(--border);
+  border-radius:8px;
+  box-shadow:var(--shadow);
+  cursor:pointer;
+  color:var(--text);
+  font-size:.82rem; font-weight:700; font-family:inherit; white-space:nowrap; line-height:1;
+  transition:background .16s ease, border-color .16s ease, transform .06s ease;
+}
+.img-ctl svg{ width:16px; height:16px; display:block; flex:0 0 auto; }
+/* ✅ o texto de um botão flex centralizado fica opticamente "baixo" em relação
+   a um ícone SVG (a caixa da linha reserva espaço de descendente que o texto
+   sem "g/p/q/y" não usa) — sobe 1px pra alinhar visualmente com o ícone */
+.img-ctl span{ transform:translateY(-1px); }
+.img-ctl:hover{ background:color-mix(in srgb, var(--text) 8%, var(--card)); }
+.img-ctl:active{ transform:translateY(1px); }
+.ticket img{display:block;width:100%;height:auto}
+.t-lines{font:10pt system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;text-align:center;line-height:1.2;color:var(--text)}
+.t-lines > div{overflow-wrap:anywhere;word-break:break-word;white-space:normal}
+.t-strong{font-weight:700}
+.t-section{margin-top:8px;font-weight:700}
+.editable[contenteditable="true"]{outline:none}
+.editable.ph{display:block;position:relative;min-height:1.35em;line-height:1.25;padding:1px 0;white-space:pre-wrap;word-break:break-word}
+.editable.ph::before{content:attr(data-ph);display:block;color:var(--muted);opacity:.82;pointer-events:none;white-space:pre-wrap}
+.editable.ph[data-has="1"]::before{display:none}
+.t-lines .editable.ph{margin:2px 0}
+
+/* ===== Form Editar ===== */
+/* .grid/.field/label vêm de base.html (evita duplicação) */
+input[type="text"],textarea,select{
+  padding:10px 12px;border:1px solid var(--border);border-radius:8px;
+  /* background-color (não o shorthand): o shorthand zerava o background-image
+     da seta do <select> definida no base.html, deixando-a invisível aqui. */
+  background-color:color-mix(in srgb, var(--card) 96%, #121518);
+  color:var(--text);outline:0;
+  transition:border-color .16s ease, box-shadow .16s ease, background .16s ease, color .16s ease;
+}
+/* :focus (box-shadow do accent) vem de base.html (evita duplicação) */
+textarea{resize:none;overflow:auto;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word}
+/* @media 720px .grid vem de base.html (evita duplicação) */
+
+/* ===================== LOCK ===================== */
+body.lock-scroll{ position: fixed; inset: 0; width: 100%; top: var(--lock-top, 0); }
+@supports not (scrollbar-gutter: stable) { body.lock-scroll{ padding-right: var(--sbw, 0px); } }
+
+/* ===================== POPUP (BASE) =====================
+   .picker-backdrop/.picker-sheet/.picker-header/.picker-title/.picker-body/
+   .picker-actions e o .popup-close vêm de base.html (evita duplicação com
+   sale.html). Só os z-index por popup (empilhamento entre si) ficam aqui. */
+#printPicker{ z-index:4200; }
+#viewPicker { z-index:4210; }
+#editPicker { z-index:4220; }
+#sDiscPopup { z-index:4230; }
+
+/* ✅ Popup de "visualizar" com o mesmo tratamento visual de Business/Settings
+   (borda/raio idênticos); cabeçalho/título já usam .popup-header/.popup-title
+   de base.html. Mantém .picker-sheet só pela mecânica de posicionamento/JS. */
+.view-sheet, .edit-sheet{
+  border-color: var(--border);
+  border-radius: 10px;
+}
+
+/* ✅ Editar (Venda e Cliente): campos um pouco mais altos — acomoda melhor
+   os botões "Desconto/Alterar/Remover" sobre o campo de Valor e mantém os
+   dois formulários padronizados. Aumento leve. */
+.edit-sheet input[type="text"]{ min-height:44px; }
+
+/* ✅ Editar (Venda e Cliente): rodapé sem o fundo escuro do .picker-actions
+   — mas mantém a linha divisória acima dos botões, igual a "Nova Venda"
+   (.actions) e ao resto do programa. */
+.plain-actions{ background:transparent; }
+
+/* ===================== VIEW — minimalista, coeso com o resto do programa
+   (sem caixas dentro de caixas: mesmo padrão .field/label usado nos
+   formulários de Business/Settings/Edit) ===================== */
+.sheet-inner{ padding:0; }
+
+.kvgrid{ display:grid; grid-template-columns: 1fr 1fr; gap:14px 16px; }
+.kvgrid.stacked{ grid-template-columns:1fr; }
+@media (max-width:720px){ .kvgrid{ grid-template-columns:1fr; } }
+
+.kv{ min-width:0; }
+.kv .label{ font-size:.82rem; color:var(--muted); margin-bottom:4px; font-weight:700; }
+.kv .value{ overflow-wrap:anywhere; word-break:break-word; white-space:pre-wrap; }
+.kv .amount{ overflow-wrap:anywhere; word-break:break-word; white-space:pre-wrap; }
+.kv.wide{ grid-column:1/-1; }
+/* ✅ Valor original riscado entre parênteses ao lado do valor final (igual a "Venda") */
+.amount-old{ color:var(--muted); font-weight:700; font-size:.9rem; font-variant-numeric:tabular-nums; }
+
+/* ✅ Ferramenta de desconto no Editar de Venda — mesmas peças de "Nova Venda"
+   (linha de rótulo com altura fixa pra Produto e Valor ficarem alinhados,
+   par Alterar/Remover, valor riscado sobreposto ao campo). */
+:root{ --edit-label-row-h: 36px; }
+.field-label-row{
+  display:flex; align-items:center; justify-content:space-between;
+  flex-wrap:wrap; gap:8px 10px; min-height:var(--edit-label-row-h);
+  margin-bottom:6px; min-width:0;
+}
+.field-label-row label{ margin-bottom:0; min-width:max-content; white-space:nowrap; flex:0 0 auto; }
+.client-actions{
+  min-height:var(--edit-label-row-h); display:flex; align-items:center;
+  justify-content:flex-end; flex:0 0 auto; margin-left:auto;
+}
+.client-actions > .btn, .client-actions > .pair{ display:flex; gap:8px; align-items:center; white-space:nowrap; }
+.btn-danger{ color:color-mix(in srgb, var(--danger, #c74848) 90%, #2b0b0b); }
+
+/* .input-wrap + ações de desconto (canto direito do campo de Valor):
+   componente em base.html. Aqui só a reserva à direita, com o inset
+   deste bloco (12px). */
+.input-wrap input[type="text"]{ padding-right: calc(12px + var(--disc-reserve)); }
+.input-wrap .amount-overlay{ padding-right: calc(12px + var(--disc-reserve)); }
+
+.amount-overlay{
+  position:absolute; inset:0; display:flex; opacity:0; align-items:center; justify-content:flex-start;
+  pointer-events:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  padding-left:12px; padding-right:12px; color:var(--text);
+  transition:opacity .16s ease;
+}
+.input-wrap.show-overlay .amount-overlay{ opacity:1; }
+.input-wrap.show-overlay input[type="text"]{ color:transparent !important; text-shadow:none !important; }
+@media (prefers-reduced-motion: reduce){
+  .amount-overlay{ transition:none!important; }
+}
+.amount-final{ font-variant-numeric:tabular-nums; color:var(--text); font-weight:700; }
+.amount-space{ white-space:pre; }
+.locked{
+  background:color-mix(in srgb, var(--accent) 10%, var(--card)) !important;
+  border-color:color-mix(in srgb, var(--accent) 45%, var(--border)) !important;
+  color:color-mix(in srgb, var(--accent) 75%, #121518) !important;
+  cursor:not-allowed;
+}
+
+/* ✅ Metadados (código/data) no rodapé do view, fora da grade de campos */
+.view-meta{
+  display:flex; flex-wrap:wrap; gap:6px 20px;
+  margin-top:18px; padding-top:12px;
+  border-top:1px solid var(--border);
+  font-size:.86rem; color:var(--text);
+}
+.view-meta .lab{ color:var(--muted); font-weight:700; }
+
+/* ===================== PRINT PREVIEW — SCROLL + BARRA CUSTOM ===================== */
+:root{
+  --psb-w: 10px;
+  --psb-radius: 8px;
+  --psb-track-bg: var(--scroll-track);
+  --psb-thumb-bg: var(--scroll-thumb);
+  --psb-thumb-hover-bg: color-mix(in srgb, var(--scroll-thumb) 82%, var(--paper) 18%);
+  --psb-thumb-active-bg: color-mix(in srgb, var(--scroll-thumb) 65%, var(--paper) 35%);
+}
+
+.print-scroll-wrap{
+  position:relative;
+  height:100%;
+  padding-right: var(--psb-w);
+  min-height:0;
+}
+#printScroll{ position: relative; height:100%; overflow:auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+#printScroll::-webkit-scrollbar{ width:0; height:0; display:none; }
+
+#psbTrack{
+  position:absolute; right:0; top:0; bottom:0; width:var(--psb-w);
+  display:grid; grid-template-rows: 12px 1fr 12px;
+  background: var(--psb-track-bg); border-radius:0; pointer-events:auto;
+}
+#psbUp,#psbDown{ border:0; margin:0; padding:0; width:100%; height:12px; background: var(--psb-track-bg); display:grid; place-items:center; cursor:default; user-select:none; }
+#psbUp::before,#psbDown::before{ content:""; width:0; height:0; border-left: 4px solid transparent; border-right:4px solid transparent; opacity:.55; }
+#psbUp::before{ border-bottom:6px solid var(--psb-thumb-bg); }
+#psbDown::before{ border-top:   6px solid var(--psb-thumb-bg); }
+#psbThumb{
+  position:relative; margin:0; width:100%; height:40px; background: var(--psb-thumb-bg); border: 2px solid var(--psb-track-bg);
+  border-radius: var(--psb-radius); box-shadow:none; cursor:default; transition: background-color .12s ease, opacity .12s ease; opacity:.96;
+}
+#psbTrack:hover #psbThumb{ background: var(--psb-thumb-hover-bg); opacity:1; }
+#printPreviewSheet.psb-dragging #psbThumb, #printPreviewSheet.psb-active #psbThumb{ background: var(--psb-thumb-active-bg); opacity:1; }
+#printPreviewSheet.psb-dragging, #printPreviewSheet.psb-dragging *{ user-select:none !important; }
+
+/* Utilitários */
+.hide{display:none!important}
+/* .card.hidden (fade + display:none atrasado) fica lá em cima, junto de .card */
+/* prefers-reduced-motion do picker vem de base.html (evita duplicação) */
+</style>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+{% if mode == 'sale' %}
+<section class="container">
+  <div class="page-shell">
+    <form method="post" action="{{ url_for('post_new_sale') }}">
+      <section>
+        <div class="legend">{{ _('Sale') }}</div>
+
+        <div class="grid sale-grid">
+          <div class="field">
+            <div class="field-label-row">
+              <label for="product">{{ _('Product') }}</label>
+            </div>
+            <input class="half" type="text" id="product" name="product" required placeholder="{{ _('Product or service') }}">
+          </div>
+
+          <div class="field">
+            <div class="field-label-row">
+              <label for="value">{{ _('Amount') }}</label>
+            </div>
+
+            <div class="input-wrap">
+              <input class="half" type="text" id="value" name="value" required
+                     inputmode="numeric" autocomplete="off" spellcheck="false"
+                     placeholder="0.00">
+
+              <span id="amountOverlay" class="amount-overlay" aria-hidden="true">
+                <span id="overlayFinal" class="amount-final"></span><span class="amount-space"> </span><span id="overlayOld" class="amount-old"></span>
+              </span>
+
+              <span id="oldPrice" class="old-price" aria-hidden="true">(<s>—</s>)</span>
+
+              <!-- ✅ ações de desconto no canto direito do próprio campo de Valor -->
+              <div class="client-actions">
+                <button type="button" id="btnAddDisc" class="btn" hidden>{{ _('Discount') }}</button>
+                <div id="pairDiscCR" class="pair" hidden>
+                  <button type="button" id="btnChangeDisc" class="btn">{{ _('Change') }}</button>
+                  <button type="button" id="btnRemoveDisc" class="btn btn-danger">{{ _('Remove') }}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="field" style="grid-column:1/-1; margin-top:6px;">
+            <label for="saleDescription">{{ _('Description') }}</label>
+            <textarea id="saleDescription" name="saleDescription" rows="4" placeholder="{{ _('Details') }}"></textarea>
+          </div>
+        </div>
+
+        <input type="hidden" id="finalValue" name="final_value" value="">
+        <input type="hidden" id="clientCode" name="client_code" value="">
+        <input type="hidden" id="existingClient" name="existing_client" value="">
+        <input type="hidden" id="clientName" name="name" value="">
+        <input type="hidden" id="clientAddress" name="address" value="">
+        <input type="hidden" id="clientContact" name="contact" value="">
+        <input type="hidden" id="clientDesc" name="clientDescription" value="">
+      </section>
+
+      <div class="actions">
+        <button type="button" id="btnSell" class="primary icon-text" aria-label="{{ _('Sell') }}" title="{{ _('Sell') }}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 5v14"></path>
+            <path d="M5 12h14"></path>
+          </svg>
+          <span>{{ _('Sell') }}</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</section>
+
+<!-- POPUP: Select/Register Client -->
+<div id="clientPicker" class="picker-backdrop" aria-hidden="true">
+  <section class="picker-sheet" role="dialog" aria-modal="true" aria-labelledby="picker-title">
+    <header class="picker-header">
+      <button type="button" id="pickerBackBtn" class="icon-btn icon-back" aria-label="{{ _('Back') }}" tabindex="-1" aria-hidden="true"></button>
+      <h3 id="picker-title" class="picker-title">{{ _('Client') }}</h3>
+      <button type="button" id="pickerHeaderBtn" class="icon-btn icon-x" aria-label="{{ _('Close') }}"></button>
+    </header>
+
+    <div id="pickerSearch" class="picker-search" aria-label="{{ _('Search') }}">
+      <div class="picker-search-row">
+        <svg class="picker-search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input id="pickerQ" class="picker-search-input" type="text"
+               placeholder="{{ _('Search') }}" autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+
+    <div class="picker-body scroll">
+      <div id="selectMode">
+        <div id="clientList" class="client-list" role="list"></div>
+        <div id="emptyHint" class="empty-hint" hidden>{{ _('No clients') }}</div>
+      </div>
+
+      <div id="registerMode" hidden>
+        <div class="reg-wrap">
+
+          <div class="field">
+            <label for="regName">{{ _('Name') }}</label>
+            <input type="text" id="regName" autocomplete="off" placeholder="{{ _('Client name') }}">
+          </div>
+
+          <div class="field">
+            <label for="regContact">{{ _('Contact') }}</label>
+            <input type="text" id="regContact" autocomplete="off" placeholder="{{ _('Phone or email') }}">
+          </div>
+
+          <div class="field">
+            <label for="regAddress">{{ _('Address') }}</label>
+            <input type="text" id="regAddress" autocomplete="off" placeholder="{{ _('Street & number') }}">
+          </div>
+
+          <div class="field">
+            <label for="regDesc">{{ _('Description') }}</label>
+            <textarea id="regDesc" rows="3" placeholder="{{ _('Client notes') }}"></textarea>
+          </div>
+
+          <div class="reg-actions">
+            <button type="button" class="primary icon-text" id="btnRegisterClient" aria-label="{{ _('Register client') }}" title="{{ _('Register client') }}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 5v14"></path>
+                <path d="M5 12h14"></path>
+              </svg>
+              <span>{{ _('Register client') }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+<script>
+  // ✅ Garante que o popup seja filho direto de <body>: evita que qualquer
+  // ancestral (sidebar/margem/scroll do conteúdo) interfira no cálculo de
+  // "position:fixed", o que causava o popup deslocado/cortado à direita
+  // em janelas não maximizadas.
+  (function(){
+    try{
+      var el = document.getElementById('clientPicker');
+      if(el && el.parentNode !== document.body){ document.body.appendChild(el); }
+    }catch(e){}
+  })();
+</script>
+
+<!-- POPUP: Discount (substitui window.prompt sem mudar a “cara”/fluxo) -->
+<div id="discPopup" class="picker-backdrop" aria-hidden="true">
+  <section id="discSheet" class="picker-sheet" style="width:min(520px,92vw)" role="dialog" aria-modal="true" aria-labelledby="disc-title">
+    <header class="popup-header">
+      <h3 id="disc-title" class="popup-title">{{ _('Discount') }}</h3>
+      <button type="button" id="discCloseBtn" class="popup-close" aria-label="{{ _('Close') }}"></button>
+    </header>
+
+    <div class="picker-body scroll" style="padding:16px">
+      <div class="field" style="margin:0">
+        <label for="discInput">{{ _('Final Value') }}</label>
+        <input class="half" type="text" id="discInput"
+               inputmode="numeric" autocomplete="off" spellcheck="false"
+               placeholder="0.00">
+      </div>
+    </div>
+
+    <div class="picker-actions">
+      <button type="button" id="discOkBtn" class="primary icon-text" aria-label="{{ _('Change') }}" title="{{ _('Change') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 6 9 17l-5-5"></path>
+        </svg>
+        <span>{{ _('Change') }}</span>
+      </button>
+    </div>
+  </section>
+</div>
+<script>
+  (function(){
+    try{
+      var el = document.getElementById('discPopup');
+      if(el && el.parentNode !== document.body){ document.body.appendChild(el); }
+    }catch(e){}
+  })();
+</script>
+
+<script>
+// ✅ tudo dentro de um IIFE: quando esse popup é embutido em management.html
+// (junto com o resto do JS dessa página), nenhuma const/function daqui
+// vaza pro escopo global e colide com o que management.html já declara.
+(function(){
+function toNumberLoose(v){
+  const s=String(v||'').trim();
+  if(!s) return 0;
+  const n = Number(
+    s.replace(/[^\d.,-]/g,'')
+     .replace(/\.(?=\d{3,})/g,'')
+     .replace(',','.')
+  );
+  return isFinite(n)?n:0;
+}
+/* toMoneyRaw / toMoneyDisplay / getContentCenterX / moneyMaskCents / moneyMaskValue /
+   renderMoneyMask / setMoneyMaskValue / enforceMoneyMask vêm de app-common.js
+   (carregado no base.html; evita duplicação com management.html) */
+
+document.addEventListener('DOMContentLoaded', () => {
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const html = document.documentElement;
+
+  /* animateInSlime / animateOutSlime / flashInvalid vêm de app-common.js (evita duplicação) */
+
+  const formEl = document.querySelector('form');
+  const btnSell = document.getElementById('btnSell');
+
+  const inpProduct = document.getElementById('product');
+  const inpAmount  = document.getElementById('value');
+
+  const hiddenFinal= document.getElementById('finalValue');
+  const oldPriceEl = document.getElementById('oldPrice');
+
+  const wrapAmount   = inpAmount.closest('.input-wrap');
+  const overlayWrap  = document.getElementById('amountOverlay');
+  const overlayFinal = document.getElementById('overlayFinal');
+  const overlayOld   = document.getElementById('overlayOld');
+
+  const btnAddDisc    = document.getElementById('btnAddDisc');
+  const pairDiscCR    = document.getElementById('pairDiscCR');
+  const btnChangeDisc = document.getElementById('btnChangeDisc');
+  const btnRemoveDisc = document.getElementById('btnRemoveDisc');
+
+  const inpClientCode = document.getElementById('clientCode');
+  const inpExisting   = document.getElementById('existingClient');
+  const inpClientName = document.getElementById('clientName');
+  const inpClientAddr = document.getElementById('clientAddress');
+  const inpClientCont = document.getElementById('clientContact');
+  const inpClientDesc = document.getElementById('clientDesc');
+
+  const picker      = document.getElementById('clientPicker');
+  const pickerSheet = picker.querySelector('.picker-sheet');
+  const pickerTitle = document.getElementById('picker-title');
+  const pickerHeader    = picker.querySelector('.picker-header');
+  const pickerHeaderBtn = document.getElementById('pickerHeaderBtn'); // "X" — sempre fecha
+  const pickerBackBtn   = document.getElementById('pickerBackBtn');   // "<" — só no modo Cadastrar
+
+  const pickerSearch = document.getElementById('pickerSearch');
+  const pickerQ      = document.getElementById('pickerQ');
+  const clientList   = document.getElementById('clientList');
+  const emptyHint    = document.getElementById('emptyHint');
+
+  const selectMode   = document.getElementById('selectMode');
+  const registerMode = document.getElementById('registerMode');
+
+  const regName   = document.getElementById('regName');
+  const regContact= document.getElementById('regContact');
+  const regAddress= document.getElementById('regAddress');
+  const regDesc   = document.getElementById('regDesc');
+  const btnRegisterClient = document.getElementById('btnRegisterClient');
+
+  const API_CLIENTS_LIST = "/api/clients";
+  const API_CLIENTS_CREATE = "/api/clients";
+
+  /* orVago(s) vem de app-common.js (evita duplicação) */
+
+  /* Discount popup nodes */
+  const discPopup    = document.getElementById('discPopup');
+  const discSheet    = document.getElementById('discSheet');
+  const discCloseBtn = document.getElementById('discCloseBtn');
+  const discOkBtn    = document.getElementById('discOkBtn');
+  const discInput    = document.getElementById('discInput');
+
+  enforceMoneyMask(inpAmount);
+  enforceMoneyMask(discInput);
+  inpAmount.placeholder = toMoneyRaw(0);
+  discInput.placeholder = toMoneyRaw(0);
+
+  const mo = new MutationObserver(()=>{ try{ syncAmountOverlayMetrics(); }catch(e){} });
+
+  function syncAmountOverlayMetrics(){
+    try{
+      if(!overlayWrap || !inpAmount) return;
+      const cs = getComputedStyle(inpAmount);
+      overlayWrap.style.font = cs.font;
+      overlayWrap.style.lineHeight = cs.lineHeight;
+      overlayWrap.style.letterSpacing = cs.letterSpacing;
+      overlayWrap.style.paddingLeft = cs.paddingLeft;
+      overlayWrap.style.paddingRight = cs.paddingRight;
+    }catch(e){}
+  }
+  function showAmountOverlay(finalTxt, oldHtml){
+    if(!wrapAmount || !overlayWrap) return;
+    wrapAmount.classList.add('show-overlay');
+    overlayFinal.textContent = finalTxt || '';
+    overlayOld.innerHTML = oldHtml || '';
+    syncAmountOverlayMetrics();
+  }
+  function hideAmountOverlay(){
+    if(!wrapAmount || !overlayWrap) return;
+    wrapAmount.classList.remove('show-overlay');
+    overlayFinal.textContent = '';
+    overlayOld.innerHTML = '';
+  }
+  function setLocked(on, nodes){
+    for(const el of nodes){
+      if(on){
+        el.setAttribute('readonly','readonly');
+        el.setAttribute('aria-readonly','true');
+        el.classList.add('locked');
+        if (el.tagName === 'TEXTAREA') el.style.userSelect='none';
+      }else{
+        el.removeAttribute('readonly');
+        el.removeAttribute('aria-readonly');
+        el.classList.remove('locked');
+        if (el.tagName === 'TEXTAREA') el.style.userSelect='';
+      }
+    }
+  }
+
+  function recenterPicker(){
+    try{
+      const cx0 = getContentCenterX();
+      const sw = (pickerSheet.getBoundingClientRect().width) || pickerSheet.offsetWidth || 0;
+      const margin = 12; // ✅ evita encostar na borda da janela
+      const half = sw / 2;
+      const minCx = half + margin;
+      const maxCx = window.innerWidth - half - margin;
+      // ✅ Só usa o centro do "conteúdo" (à direita da sidebar) se ainda
+      // couber inteiro na janela; senão, cai para o centro real da janela.
+      const cx = (maxCx >= minCx) ? Math.min(Math.max(cx0, minCx), maxCx) : (window.innerWidth / 2);
+      pickerSheet.style.left = Math.round(cx) + 'px';
+    }catch(e){}
+  }
+  function recenterSoon(){
+    recenterPicker();
+    requestAnimationFrame(recenterPicker);
+    setTimeout(recenterPicker, 180);
+  }
+  window.addEventListener('resize', ()=>{
+    recenterSoon();
+    syncAmountOverlayMetrics();
+  });
+  const btnSide = document.getElementById('btnSidebarToggle');
+  if(btnSide) btnSide.addEventListener('click', ()=> setTimeout(()=>{
+    recenterSoon();
+    syncAmountOverlayMetrics();
+  }, 0));
+  const sideNav = document.getElementById('sideNav');
+  if(sideNav) sideNav.addEventListener('transitionend', (ev)=>{
+    if(ev.propertyName==='width'){
+      recenterSoon();
+      syncAmountOverlayMetrics();
+    }
+  });
+
+  let allClients = null;
+  let loadingClients = false;
+
+  function escapeHtml(s){
+    return String(s||'')
+      .replaceAll('&','&amp;')
+      .replaceAll('<','&lt;')
+      .replaceAll('>','&gt;');
+  }
+  function normal(t){
+    return (t||'').normalize('NFD').replace(/[\u00B7\u0300-\u036f]/g,'').toLowerCase();
+  }
+
+  function renderClientList(items){
+    clientList.innerHTML = '';
+
+    const add = document.createElement('div');
+    add.className = 'client-item add-new';
+    add.role = 'listitem';
+    add.innerHTML = `
+      <div class="meta">
+        <div class="name">${escapeHtml("{{ _('New client') }}")}</div>
+        <div class="cont">${escapeHtml("{{ _('Tap to add') }}")}</div>
+        <div class="addr"></div>
+      </div>
+    `;
+    add.addEventListener('click', ()=> enterRegisterMode());
+    clientList.appendChild(add);
+
+    if(!items || items.length === 0){
+      emptyHint.hidden = false;
+      return;
+    }
+    emptyHint.hidden = true;
+
+    for(const c of items){
+      const el = document.createElement('div');
+      el.className = 'client-item';
+      el.role = 'listitem';
+      el.innerHTML = `
+        <div class="meta">
+          <div class="name">${escapeHtml(c.name||'')}</div>
+          <div class="cont">${escapeHtml(orVago(c.contact))}</div>
+          <div class="addr">${escapeHtml(orVago(c.address))}</div>
+        </div>
+      `;
+      el.addEventListener('click', ()=> selectClient(c));
+      clientList.appendChild(el);
+    }
+  }
+
+  function softRender(items){
+    if(reduceMotion){
+      renderClientList(items);
+      return;
+    }
+    try{
+      clientList.animate(
+        [{ opacity: 1, transform:'translateY(0)' }, { opacity: 0, transform:'translateY(2px)' }],
+        { duration: 90, easing:'ease-out', fill:'forwards' }
+      ).onfinish = () => {
+        renderClientList(items);
+        clientList.animate(
+          [{ opacity: 0, transform:'translateY(2px)' }, { opacity: 1, transform:'translateY(0)' }],
+          { duration: 140, easing:'cubic-bezier(.22,.61,.36,1)', fill:'forwards' }
+        );
+      };
+    }catch(e){
+      renderClientList(items);
+    }
+  }
+
+  function applyClientFilter(q){
+    const qq = normal(String(q||'').trim());
+    const src = Array.isArray(allClients) ? allClients : [];
+    if(!qq){
+      softRender(src);
+      return;
+    }
+    const filtered = src.filter(c=>{
+      const hay = normal(`${c.name||''} ${c.contact||''} ${c.address||''} ${c.client_description||''} ${c.code||''}`);
+      return hay.includes(qq);
+    });
+    softRender(filtered);
+  }
+
+  async function loadClients(force=false){
+    if(loadingClients) return;
+    if(Array.isArray(allClients) && !force) return;
+
+    loadingClients = true;
+    if(force) allClients = null;
+
+    try{
+      const r = await fetch(API_CLIENTS_LIST, { cache: 'no-store' });
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      const data = await r.json();
+      const items = Array.isArray(data) ? data : (data.items || []);
+      allClients = Array.isArray(items) ? items : [];
+    }catch(err){
+      console.warn('Client list fetch failed:', err);
+      allClients = [];
+    }finally{
+      loadingClients = false;
+    }
+  }
+
+  let pickerMode = 'select';
+  let pickerJustOpened = false;   // pula a animação de altura na 1ª etapa após abrir
+
+  // ✅ O "X" no canto sempre fecha o popup. No modo Cadastrar, um "<"
+  // (voltar) desliza pra dentro à esquerda do título pra retornar à lista
+  // (a transição fica a cargo do CSS via classe .show-back no header).
+  function setHeaderButton(mode){
+    const showBack = (mode === 'register');
+    if(pickerHeader) pickerHeader.classList.toggle('show-back', showBack);
+    if(pickerBackBtn){
+      // colapsado no modo lista: fora da ordem de tabulação e do a11y tree
+      pickerBackBtn.tabIndex = showBack ? 0 : -1;
+      pickerBackBtn.setAttribute('aria-hidden', showBack ? 'false' : 'true');
+    }
+  }
+
+  // ✅ Anima a mudança de altura do sheet entre Lista <-> Cadastrar: mede
+  // a altura antes/depois da mutação do DOM e transiciona `height` (o
+  // #clientPicker .picker-sheet tem transition:height no CSS). Sem isso a
+  // caixa saltava de tamanho no corte.
+  function animateSheetHeight(mutate){
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // não anima na 1ª montagem (o sheet ainda está "entrando") nem com
+    // reduced-motion — aí só aplica a mutação direto.
+    if(reduce || !pickerSheet || !picker.classList.contains('open') || pickerJustOpened){
+      pickerJustOpened = false;
+      mutate();
+      return;
+    }
+
+    const start = pickerSheet.getBoundingClientRect().height;
+    mutate();
+    const end = pickerSheet.getBoundingClientRect().height;
+    if(Math.abs(start - end) < 2) return;
+
+    pickerSheet.style.height = start + 'px';
+    void pickerSheet.offsetHeight;          // força reflow p/ o browser "fixar" o start
+    pickerSheet.style.height = end + 'px';
+
+    let settled = false;
+    const done = ()=>{
+      if(settled) return;
+      settled = true;
+      pickerSheet.style.height = '';
+      pickerSheet.removeEventListener('transitionend', onEnd);
+    };
+    const onEnd = (ev)=>{ if(ev.propertyName === 'height') done(); };
+    pickerSheet.addEventListener('transitionend', onEnd);
+    setTimeout(done, 320);
+  }
+
+  function enterSelectMode(){
+    pickerMode = 'select';
+    pickerTitle.textContent = "{{ _('Client') }}";
+    animateSheetHeight(()=>{
+      setHeaderButton('select');
+      registerMode.hidden = true;
+      selectMode.hidden = false;
+      pickerSearch.hidden = false;
+    });
+    // ✅ sem foco automático na busca ao abrir/voltar — o cursor só vai
+    // pra barra quando a pessoa clica nela.
+  }
+
+  function enterRegisterMode(){
+    pickerMode = 'register';
+    pickerTitle.textContent = "{{ _('Client') }}";
+    try{ regName.value=''; regContact.value=''; regAddress.value=''; regDesc.value=''; }catch(_){}
+    animateSheetHeight(()=>{
+      setHeaderButton('register');
+      pickerSearch.hidden = true;
+      selectMode.hidden = true;
+      registerMode.hidden = false;
+    });
+    setTimeout(()=>{ try{ regName.focus(); regName.select(); }catch(e){} }, 20);
+  }
+
+  /* =========================================================
+     ✅ LOCK DO FUNDO (sem remover scrollbar / sem mudar gutter)
+     - mantém o scrollTop estável enquanto o picker estiver aberto
+     - bloqueia wheel/teclas que poderiam rolar o fundo
+     ========================================================= */
+  const appScroller = document.getElementById('appScroller') || document.querySelector('.app');
+  let lockedScrollTop = null;
+
+  function isTypingTarget(t){
+    if(!t) return false;
+    const tag = (t.tagName || '').toUpperCase();
+    if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if(t.isContentEditable) return true;
+    return false;
+  }
+
+  function lockBackground(on){
+    if(!appScroller) return;
+    if(on){
+      lockedScrollTop = appScroller.scrollTop || 0;
+    }else{
+      lockedScrollTop = null;
+    }
+  }
+
+  function keepLocked(){
+    if(!appScroller) return;
+    if(lockedScrollTop == null) return;
+    if(appScroller.scrollTop !== lockedScrollTop){
+      appScroller.scrollTop = lockedScrollTop;
+    }
+  }
+
+  if(appScroller){
+    appScroller.addEventListener('scroll', ()=>{ keepLocked(); }, { passive:true });
+  }
+
+  /* wheel fora do corpo rolável do picker não deve “vazar” pro fundo */
+  picker.addEventListener('wheel', (e)=>{
+    if(!picker.classList.contains('open')) return;
+    if(e.target && e.target.closest && e.target.closest('.picker-body')) return; // deixa rolar a lista
+    e.preventDefault();
+  }, { passive:false });
+
+  picker.addEventListener('touchmove', (e)=>{
+    if(!picker.classList.contains('open')) return;
+    if(e.target && e.target.closest && e.target.closest('.picker-body')) return;
+    e.preventDefault();
+  }, { passive:false });
+
+  document.addEventListener('keydown', (e)=>{
+    if(!picker.classList.contains('open')) return;
+
+    /* não atrapalha digitação */
+    if(isTypingTarget(e.target)) return;
+
+    /* bloqueia teclas que rolam o fundo */
+    const k = e.key;
+    if(k === 'PageDown' || k === 'PageUp' || k === 'Home' || k === 'End' || k === ' ' ||
+       k === 'ArrowDown' || k === 'ArrowUp'){
+      e.preventDefault();
+      keepLocked();
+    }
+  }, { capture:true });
+
+  function setPickerOpen(on){
+    try{
+      if(on) html.classList.add('picker-open');
+      else html.classList.remove('picker-open');
+    }catch(e){}
+    lockBackground(!!on);
+    /* reforço pós-layout */
+    if(on){
+      requestAnimationFrame(()=> lockBackground(true));
+      setTimeout(()=> keepLocked(), 0);
+    }
+  }
+
+  window.openClientPicker = async function openClientPicker(){
+    setPickerOpen(true);
+    recenterSoon();
+
+    picker.classList.remove('leaving');
+    picker.classList.add('open');
+    picker.setAttribute('aria-hidden','false');
+
+    pickerJustOpened = true;
+    enterSelectMode();
+    await loadClients(false);
+    applyClientFilter(pickerQ.value || '');
+  }
+
+  window.closeClientPicker = function closeClientPicker(){
+    if(!picker.classList.contains('open')) return;
+    picker.classList.add('leaving');
+    picker.classList.remove('open');
+    picker.setAttribute('aria-hidden','true');
+
+    const t = reduceMotion ? 0 : 220;
+    setTimeout(()=>{
+      try{ picker.classList.remove('leaving'); }catch(e){}
+      setPickerOpen(false);
+      recenterSoon();
+    }, t);
+  }
+
+  picker.addEventListener('click', (e)=>{ if(e.target===picker) closeClientPicker(); });
+
+  // "X" — sempre fecha, em qualquer modo
+  pickerHeaderBtn.addEventListener('click', ()=>{ closeClientPicker(); });
+
+  // "<" — volta do Cadastrar para a lista de clientes
+  if(pickerBackBtn){
+    pickerBackBtn.addEventListener('click', ()=>{
+      enterSelectMode();
+      applyClientFilter(pickerQ.value || '');
+    });
+  }
+
+  let qTimer = null;
+  pickerQ.addEventListener('input', ()=>{
+    if(qTimer) clearTimeout(qTimer);
+    qTimer = setTimeout(()=> applyClientFilter(pickerQ.value||''), 60);
+  });
+  pickerQ.addEventListener('keydown', (e)=>{
+    if(e.key==='Enter'){ e.preventDefault(); }
+    if(e.key==='Escape'){
+      e.preventDefault();
+      if((pickerQ.value||'').trim()){
+        pickerQ.value = '';
+        applyClientFilter('');
+      }else{
+        closeClientPicker();
+      }
+    }
+  });
+
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape' && picker.classList.contains('open')){
+      e.preventDefault();
+      if(pickerMode === 'register'){
+        enterSelectMode();
+        applyClientFilter(pickerQ.value || '');
+      }else{
+        closeClientPicker();
+      }
+    }
+  });
+
+  let allowSubmit = false;
+
+  function selectClient(c){
+    if(!c) return;
+
+    const code = String(c.code || '').padStart(6,'0');
+    inpClientCode.value = code;
+    inpExisting.value = '1';
+
+    inpClientName.value = c.name || '';
+    inpClientAddr.value = c.address || '';
+    inpClientCont.value = c.contact || '';
+    inpClientDesc.value = c.client_description || '';
+
+    closeClientPicker();
+
+    allowSubmit = true;
+    try{
+      if(typeof formEl.requestSubmit === 'function'){
+        formEl.requestSubmit();
+      }else{
+        formEl.submit();
+      }
+    }catch(_){
+      formEl.submit();
+    }
+  }
+
+  async function registerClient(){
+    const name = (regName.value || '').trim();
+    const contact = (regContact.value || '').trim();
+    const address = (regAddress.value || '').trim();
+    const desc = (regDesc.value || '').trim();
+
+    if(!name){
+      flashInvalid(regName);
+      try{ regName.focus(); }catch(_){}
+      return;
+    }
+
+    btnRegisterClient.disabled = true;
+
+    try{
+      const r = await fetch(API_CLIENTS_CREATE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          contact,
+          address,
+          client_description: desc
+        })
+      });
+
+      const data = await r.json().catch(()=> ({}));
+      if(!r.ok || !data || data.ok !== true){
+        flashInvalid(regName);
+        console.warn('register client failed', r.status, data);
+        return;
+      }
+
+      enterSelectMode();
+      await loadClients(true);
+      pickerQ.value = '';
+      applyClientFilter('');
+
+    }catch(err){
+      console.warn('register client error', err);
+      flashInvalid(regName);
+    }finally{
+      btnRegisterClient.disabled = false;
+    }
+  }
+
+  btnRegisterClient.addEventListener('click', registerClient);
+
+  function validateSaleFields(){
+    const product = (inpProduct.value || '').trim();
+    const amount  = moneyMaskValue(inpAmount);
+
+    if(!product){
+      flashInvalid(inpProduct);
+      try{ inpProduct.focus(); }catch(_){}
+      return false;
+    }
+    if(!(amount > 0)){
+      flashInvalid(inpAmount);
+      try{ inpAmount.focus(); }catch(_){}
+      return false;
+    }
+    return true;
+  }
+
+  btnSell.addEventListener('click', async (e)=>{
+    e.preventDefault();
+    if(!validateSaleFields()) return;
+    await openClientPicker();
+  });
+
+  /* ===================== DISCOUNT (novo modal, mesmo fluxo do prompt) ===================== */
+  let baseAmountForDiscount = null;
+  let discResolve = null;
+
+  // ✅ limite máximo permitido pro "final amount" (só valida ao clicar em "Alterar")
+  let discMaxAllowed = null;
+
+  function setDiscOpen(on){
+    if(!discPopup) return;
+    discPopup.setAttribute('aria-hidden', on ? 'false' : 'true');
+  }
+
+  function openDiscModal(initialValue, maxAllowed){
+    return new Promise((resolve)=>{
+      if(!discPopup || !discInput || !discOkBtn || !discCloseBtn){
+        resolve(null);
+        return;
+      }
+      discResolve = resolve;
+      discMaxAllowed = (typeof maxAllowed === 'number' && isFinite(maxAllowed)) ? maxAllowed : null;
+
+      discPopup.classList.remove('leaving');
+      discPopup.classList.add('open');
+      setDiscOpen(true);
+
+      setMoneyMaskValue(discInput, 0);
+      setTimeout(()=>{ try{ discInput.focus(); }catch(e){} }, 20);
+    });
+  }
+
+  function closeDiscModal(val=null){
+    if(!discPopup) return;
+    discPopup.classList.add('leaving');
+    discPopup.classList.remove('open');
+    setDiscOpen(false);
+
+    const t = reduceMotion ? 0 : 220;
+    setTimeout(()=>{
+      try{ discPopup.classList.remove('leaving'); }catch(e){}
+      discMaxAllowed = null; // limpa limite ao fechar
+
+      if(typeof discResolve === 'function'){
+        const r = discResolve;
+        discResolve = null;
+        r(val);
+      }
+    }, t);
+  }
+
+  discPopup?.addEventListener('click', (e)=>{
+    if(e.target === discPopup) closeDiscModal(null);
+  });
+  discCloseBtn?.addEventListener('click', ()=> closeDiscModal(null));
+
+  // ✅ valida "maior que o valor base" SOMENTE ao clicar em Alterar
+  discOkBtn?.addEventListener('click', ()=>{
+    const finCents = moneyMaskCents(discInput);
+
+    if(!(finCents > 0)){
+      flashInvalid(discInput);
+      try{ discInput.focus(); }catch(_){}
+      return;
+    }
+
+    const maxCents = Math.round((discMaxAllowed || 0) * 100);
+    if(maxCents > 0 && finCents > maxCents){
+      // feedback igual: vermelho + chacoalhada + apaga número (apenas após clicar)
+      renderMoneyMask(discInput, 0);
+      discInput.dispatchEvent(new Event('input', { bubbles:true }));
+      flashInvalid(discInput);
+      try{ discInput.focus(); }catch(_){}
+      return;
+    }
+
+    closeDiscModal(String(finCents / 100));
+  });
+
+  discInput?.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      discOkBtn?.click();
+    }
+    if(e.key === 'Escape'){
+      e.preventDefault();
+      closeDiscModal(null);
+    }
+  });
+
+  async function openDisc(){
+    // ✅ valor BASE = original (se já existe desconto) ou o valor atual digitado
+    const base = (baseAmountForDiscount && baseAmountForDiscount > 0)
+      ? baseAmountForDiscount
+      : (moneyMaskValue(inpAmount) || 0);
+
+    if(!(base > 0)) return;
+
+    const curFinal = toNumberLoose(hiddenFinal.value) || (inpAmount.dataset.locked ? (moneyMaskValue(inpAmount) || 0) : 0);
+    const initial = (curFinal > 0) ? curFinal : base;
+
+    // ✅ abre modal com limite base (só bloqueia no clique do botão)
+    const raw = await openDiscModal(initial, base);
+    if(raw == null) return;
+
+    const fin = Number(raw) || 0;
+    const finCents = Math.round(fin * 100);
+    const baseCents = Math.round(base * 100);
+    if(!(fin > 0)){
+      flashInvalid(inpAmount);
+      return;
+    }
+
+    // ✅ se já tem desconto e o usuário volta ao base, remove desconto
+    if(baseAmountForDiscount && baseAmountForDiscount > 0 && finCents === baseCents){
+      removeDisc();
+      return;
+    }
+
+    // ✅ se não tem desconto e final==base, não faz nada
+    if(!(baseAmountForDiscount && baseAmountForDiscount > 0) && finCents === baseCents){
+      return;
+    }
+
+    // ✅ se o final não mudou, não faz nada
+    const appliedFinal = toNumberLoose(hiddenFinal.value) || 0;
+    if(appliedFinal > 0 && finCents === Math.round(appliedFinal * 100)){
+      return;
+    }
+
+    hiddenFinal.value = String(fin);
+    baseAmountForDiscount = base;
+
+    const finalToShow = toNumberLoose(hiddenFinal.value);
+    setMoneyMaskValue(inpAmount, finalToShow);
+    inpAmount.dataset.locked = '1';
+    setLocked(true, [inpAmount]);
+
+    if(baseAmountForDiscount > 0 && baseCents !== Math.round(finalToShow * 100)){
+      const oldHtml = `(<s>${toMoneyDisplay(baseAmountForDiscount)}</s>)`;
+      oldPriceEl.innerHTML = oldHtml;
+      showAmountOverlay(toMoneyDisplay(finalToShow), oldHtml);
+    }else{
+      oldPriceEl.innerHTML = `(<s>—</s>)`;
+      hideAmountOverlay();
+    }
+
+    setDiscMode('pair');
+  }
+
+  function removeDisc(){
+    if(baseAmountForDiscount && baseAmountForDiscount > 0){
+      setMoneyMaskValue(inpAmount, baseAmountForDiscount);
+    } else {
+      renderMoneyMask(inpAmount, 0);
+    }
+    hiddenFinal.value = '';
+    oldPriceEl.innerHTML = `(<s>—</s>)`;
+    hideAmountOverlay();
+
+    inpAmount.dataset.locked = '';
+    setLocked(false, [inpAmount]);
+
+    baseAmountForDiscount = null;
+
+    setDiscMode('add');
+  }
+
+  // ✅ estado-alvo rastreado à parte do atributo `hidden` do DOM: durante a
+  // animação de saída o elemento só recebe `hidden=true` ao final (260ms),
+  // então checar `.hidden` para decidir se anima de novo é uma corrida —
+  // digitar/apagar/digitar rápido demais fazia o botão "sumir" de vez.
+  let discMode = 'none'; // 'none' | 'add' | 'pair'
+  function setDiscMode(mode){
+    if(mode === discMode) return;
+    discMode = mode;
+    if(mode === 'pair'){
+      pairDiscCR.hidden = false;
+      animateInSlime(pairDiscCR);
+      animateOutSlime(btnAddDisc);
+    }else if(mode === 'add'){
+      btnAddDisc.hidden = false;
+      animateInSlime(btnAddDisc);
+      animateOutSlime(pairDiscCR);
+    }else{
+      animateOutSlime(btnAddDisc);
+      animateOutSlime(pairDiscCR);
+    }
+  }
+
+  function updateAddDiscVisibility(){
+    if(discMode === 'pair') return;
+    const amt = moneyMaskValue(inpAmount);
+    const isLocked = !!inpAmount.dataset.locked;
+    setDiscMode((amt > 0 && !isLocked) ? 'add' : 'none');
+  }
+
+  updateAddDiscVisibility();
+  inpAmount.addEventListener('input', ()=>{
+    if(!inpAmount.hasAttribute('readonly')){
+      baseAmountForDiscount = null;
+      oldPriceEl.innerHTML = `(<s>—</s>)`;
+      hideAmountOverlay();
+    }
+    updateAddDiscVisibility();
+  });
+
+  btnAddDisc.addEventListener('click', (e)=>{
+    e.preventDefault();
+    const amt = moneyMaskValue(inpAmount);
+    if(!(amt > 0)){
+      flashInvalid(inpAmount);
+      try{ inpAmount.focus(); }catch(_){}
+      return;
+    }
+    openDisc();
+  });
+
+  btnChangeDisc.addEventListener('click', (e)=>{ e.preventDefault(); openDisc(); });
+  btnRemoveDisc.addEventListener('click', (e)=>{ e.preventDefault(); removeDisc(); });
+
+  mo.observe(inpAmount, { attributes:true, attributeFilter:['data-locked','class'] });
+
+  formEl.addEventListener('submit', (e)=>{
+    if(!allowSubmit){
+      e.preventDefault();
+      if(!validateSaleFields()) return;
+      openClientPicker();
+      return;
+    }
+
+    const final = toNumberLoose(hiddenFinal.value) || moneyMaskValue(inpAmount);
+    let base = toNumberLoose(oldPriceEl?.textContent || '');
+    if(!(base > 0)) base = final;
+
+    hiddenFinal.value = String(final);
+    setMoneyMaskValue(inpAmount, base);
+
+    allowSubmit = false;
+  });
+});
+})();
+</script>
+
+<!-- Business/Settings: disponiveis tambem na secao Sale (mesmo popup global) -->
+{% include "businesspopup.html" %}
+{% include "settingspopup.html" %}
+{% else %}
+
+<!-- Boot-stabilizer: evita “balanços”/flicks no 1º paint -->
+<script>
+  (function(){
+    try{
+      document.documentElement.classList.add('fab-no-boot','ps-boot');
+    }catch(e){}
+  })();
+</script>
+
+<style>
+/* ===== BOOT GUARD (zera flick / balanço antes do JS fixar posição/largura) ===== */
+html.ps-boot body.main-chrome .page-search-row{opacity:0;pointer-events:none}
+html.ps-boot body.main-chrome .page-search-inner,
+html.ps-boot body.main-chrome .page-actions,
+html.ps-boot body.main-chrome .actdial,
+html.ps-boot body.main-chrome .fab-hint{transition:none!important}
+
+/* (reduz troca de largura ao aparecer scrollbar) */
+#appScroller,.app{scrollbar-gutter:stable}
+</style>
+
+<style>
+/* ===== Searchbar + FAB + hints ===== */
+.page-search{margin:0 0 18px}
+body.main-chrome .page-search{
+  position:relative;
+  height:max(var(--page-search-h,0px),var(--page-search-min-h,66px));
+  isolation:isolate;z-index:1600;
+  transition:margin-bottom var(--float-anim,220ms) cubic-bezier(.20,.70,.20,1);
+}
+body.main-chrome.app-scrolled .page-search{margin-bottom:calc(18px - var(--page-search-overlap,0px))}
+
+.page-search-row{
+  /* ✅ já nasce FIXO e centrado: impede o “vai pra direita e volta” */
+  position:fixed;
+  top:var(--page-search-top,0px);
+  left:50%;
+  transform:translateX(-50%);
+  width:var(--page-search-w,1022px);
+  max-width:calc(100vw - 24px);
+
+  margin:0;
+  overflow:visible;
+  z-index:1600;
+
+  /* ⚠️ NÃO use paint containment aqui: ele CLIPA o FAB no modo não-compacto */
+  contain:layout;
+  will-change:top,left,width,transform;
+  backface-visibility:hidden;
+}
+
+/* ✅ quando detectar sobreposição na scrollbar */
+html.ps-compact body.main-chrome .page-search-row{
+  max-width:var(--page-search-compact-total,1022px);
+  display:flex;
+  align-items:center;
+  gap:var(--page-search-gap,12px);
+}
+html.ps-compact body.main-chrome .page-search-row{padding-right:0!important}
+
+/* ✅ SEM animação de inicialização do FAB (e dial/hints) */
+html.fab-no-boot .page-actions,
+html.fab-no-boot .actfab,
+html.fab-no-boot .actfab svg.plus,
+html.fab-no-boot .actdial,
+html.fab-no-boot .fab-hint{
+  transition:none!important;
+}
+
+/* glass (caso você remova do base.html junto com o bloco do searchbar) */
+.glass{
+  background:color-mix(in srgb,var(--card) 70%,transparent);
+  border:1px solid color-mix(in srgb,var(--border) 80%,transparent);
+  backdrop-filter:var(--bf, saturate(120%) blur(4px));
+  -webkit-backdrop-filter:var(--bf, saturate(120%) blur(4px));
+  transform:translate3d(0,0,0);backface-visibility:hidden;will-change:transform,opacity;
+  box-shadow:none;
+}
+
+.page-search-inner{
+  width:100%;
+  border-radius:var(--radius-lg,14px);
+  padding:12px 14px;
+  display:flex;align-items:center;gap:10px;
+  position:relative;overflow:hidden;
+  background-clip:padding-box;
+  box-shadow:none;
+  transition:background var(--float-anim,220ms) cubic-bezier(.20,.70,.20,1),
+           border-color var(--float-anim,220ms) cubic-bezier(.20,.70,.20,1),
+           box-shadow var(--float-anim,220ms) cubic-bezier(.20,.70,.20,1),
+           transform var(--float-anim,220ms) cubic-bezier(.20,.70,.20,1);
+}
+
+/* ✅ no modo compacto, o search vira flex:1 */
+html.ps-compact .page-search-inner{
+  flex:1 1 auto;
+  min-width:0;
+  width:auto;
+}
+
+/* ✅ um pouco mais opaca que o .glass padrão (70%) — melhora a legibilidade
+   do campo sem virar um fundo sólido */
+.page-search-inner.glass{
+  background:color-mix(in srgb, var(--card) 78%, transparent);
+  border-color:color-mix(in srgb, var(--border) 86%, transparent);
+}
+
+.page-search-icon{width:18px;height:18px;color:var(--muted);opacity:.9;flex:0 0 auto}
+.page-search-input{
+  width:100%;min-width:0;border-radius:10px;border:1px solid var(--input-border);
+  background:var(--input-bg);color:var(--text);
+  padding:10px 12px;font-size:.95rem;outline:0;
+}
+.page-search-input::placeholder{color:var(--muted)}
+.page-search-input:focus{border-color:var(--accent)}
+
+/* normal: FAB fora da ROW */
+.page-actions{
+  position:absolute;
+  left:calc(100% + 12px);
+  top:50%;
+  transform:translateY(-50%);
+  z-index:1700;
+  transition:transform var(--float-anim,220ms) cubic-bezier(.20,.70,.20,1)
+}
+@media (max-width:1120px){
+  .page-search-row{padding-right:64px}
+  .page-actions{left:auto;right:10px}
+}
+
+/* ✅ compacto: FAB dentro da ROW */
+html.ps-compact .page-actions{
+  position:relative!important;
+  left:auto!important; right:auto!important;
+  top:auto!important;
+  transform:none!important;
+  flex:0 0 auto;
+}
+
+.actfab{
+  width:48px;height:48px;border-radius:8px;
+  display:grid;place-items:center;cursor:pointer;
+  padding:0;line-height:0;font-size:0;
+  -webkit-tap-highlight-color:transparent;
+  box-shadow:none;
+  transition:background var(--sidebar-anim,220ms) ease,
+           border-color var(--sidebar-anim,220ms) ease,
+           transform .06s ease,
+           box-shadow var(--float-anim,220ms) cubic-bezier(.20,.70,.20,1);
+}
+.actfab:hover{background:color-mix(in srgb,var(--hover-bg) 78%,transparent);border-color:transparent}
+.actfab:active{transform:translate3d(0,1px,0)}
+.actfab svg.plus{width:22px;height:22px;display:block;transform-origin:50% 50%;transition:transform var(--sidebar-anim,220ms) ease}
+.actfab[data-open="1"] svg.plus{transform:rotate(45deg)}
+
+.actdial{
+  position:absolute;right:0;top:calc(100% + 10px);
+  display:flex;flex-direction:column;gap:10px;align-items:flex-end;z-index:1800;
+  pointer-events:none;opacity:0;transform:translateY(-4px) scale(.98);
+  transition:opacity var(--sidebar-anim,220ms) ease, transform var(--sidebar-anim,220ms) ease;
+}
+.actdial[data-open="1"]{pointer-events:auto;opacity:1;transform:translateY(0) scale(1)}
+
+/* ✅ só ícone por padrão — no hover/foco "estica" o botão pra direita e a
+   legenda aparece (span vai de max-width:0 pra seu tamanho real). Nada de
+   texto sempre visível: economiza espaço no dial fechado, mas continua
+   descritivo ao passar o mouse (title/aria-label cobrem teclado e leitor de tela). */
+.actmini{
+  height:48px;min-width:48px;border-radius:8px;border:1px solid var(--border);
+  background:var(--card);color:var(--icon);
+  display:inline-flex;align-items:center;cursor:pointer;
+  padding:0 13px;
+  font-size:.92rem;font-weight:700;white-space:nowrap;font-family:inherit;
+  -webkit-tap-highlight-color:transparent;
+  transition:background var(--sidebar-anim,220ms) ease,border-color var(--sidebar-anim,220ms) ease,transform .06s ease,padding .22s ease;
+}
+.actmini:hover,.actmini:focus-visible{background:var(--hover-bg);border-color:transparent;padding:0 16px 0 14px}
+.actmini:active{transform:translateY(1px)}
+.actmini svg{width:22px;height:22px;display:block;flex:0 0 auto}
+.actmini span{
+  display:inline-block;max-width:0;margin-left:0;opacity:0;overflow:hidden;
+  white-space:nowrap;transition:max-width .22s ease,margin-left .22s ease,opacity .15s ease .02s;
+}
+.actmini:hover span,.actmini:focus-visible span{max-width:140px;margin-left:10px;opacity:1}
+
+/* hints */
+.fab-hint{
+  /* ✅ centralizado sobre a LISTA (mesma lógica do botão voltar ao topo):
+     "left" é ajustado via JS (getContentCenterX), e o deslocamento de -50%
+     usa a propriedade "translate" (não "transform") — assim não conflita
+     com o transform:scale(...) que animateInSlime/animateOutSlime aplicam
+     na entrada/saída */
+  position:fixed;left:50%;translate:-50% 0;bottom:max(16px,env(safe-area-inset-bottom));
+  z-index:1900;
+  width:fit-content;max-width:min(820px,calc(100vw - 32px));min-width:280px;
+  border-radius:var(--radius-lg,14px);padding:12px 14px;
+  display:flex;align-items:center;gap:12px;
+  box-shadow:none;
+}
+/* ✅ Legibilidade: fundo quase opaco (o .glass padrão do app é translúcido
+   demais para texto de leitura corrida — mercado atual usa fundo sólido/
+   quase sólido em tooltips/hints com texto, mantendo só um traço do blur). */
+.fab-hint.glass{
+  background:color-mix(in srgb, var(--card) 96%, transparent) !important;
+  border-color:color-mix(in srgb, var(--border) 96%, transparent) !important;
+}
+.fab-hint[hidden]{display:none!important}
+.fab-hint .hint-ico{width:18px;height:18px;flex:0 0 auto;color:var(--muted);opacity:.95}
+.fab-hint .hint-body{min-width:0;flex:1 1 auto}
+.fab-hint .hint-title{font-weight:800;font-size:.95rem;line-height:1.1;margin:0 0 2px}
+.fab-hint .hint-text{font-size:.9rem;color:var(--muted);line-height:1.25;margin:0}
+.fab-hint .hint-actions{display:flex;gap:10px;align-items:center;flex:0 0 auto;flex-wrap:wrap;justify-content:flex-end}
+
+/* ✅ AGORA 100% OPACO (sem translúcido) */
+.fab-hint .hint-btn{
+  border:1px solid var(--border) !important;
+  background:var(--card) !important;
+  background-color:var(--card) !important;
+  background-image:none !important;
+  box-shadow:none !important;
+  opacity:1 !important;
+  color:var(--text) !important;
+  padding:8px 10px;border-radius:8px;font-weight:800;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+  transition:background var(--sidebar-anim,220ms) ease,transform .06s ease,border-color var(--sidebar-anim,220ms) ease;
+}
+.fab-hint .hint-btn:hover{background:var(--hover-bg) !important;border-color:transparent !important}
+.fab-hint .hint-btn:active{transform:translateY(1px)}
+.fab-hint .hint-btn[disabled]{opacity:.55 !important;cursor:not-allowed;transform:none!important}
+.fab-hint .hint-btn.icon-only{padding:9px;display:inline-flex;align-items:center;justify-content:center;line-height:0}
+.fab-hint .hint-btn.icon-only svg{width:18px;height:18px;display:block}
+
+/* ✅ confirm opaco (sem transparência) */
+.fab-hint .hint-btn.confirm{
+  border-color:var(--accent) !important;
+  background:var(--accent) !important;
+  background-color:var(--accent) !important;
+  color:var(--paper) !important;
+}
+.fab-hint .hint-btn.confirm:hover{
+  background:color-mix(in srgb, var(--accent) 92%, var(--paper)) !important;
+  border-color:color-mix(in srgb, var(--accent) 92%, var(--paper)) !important;
+}
+
+/* ✅ grupo "contagem em cima / checkbox redonda embaixo" (sem legenda "Todos") */
+.hint-select-all{display:flex;flex-direction:column;align-items:center;gap:4px;padding:0 2px}
+.hint-select-all .hint-count{font-size:1rem;line-height:1;font-weight:900;color:var(--text)}
+
+.hint-check{
+  display:flex;align-items:center;justify-content:center;
+  padding:0;border:none;background:transparent;user-select:none;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;line-height:1;
+}
+.hint-check:hover{opacity:.92}
+.hint-check input[type="checkbox"]{
+  appearance:none;-webkit-appearance:none;width:18px;height:18px;border-radius:5px;
+  border:2px solid color-mix(in srgb,var(--border) 86%,transparent);background:transparent;
+  display:inline-grid;place-items:center;cursor:pointer;margin:0;
+  transition:background 120ms ease;
+}
+.hint-check input[type="checkbox"]:checked{background:var(--accent)}
+
+/* no layout main-chrome o painel de seleção é substituído pelo FAB/hints */
+body.main-chrome #bulkPanel{display:none!important}
+
+/* prewarm (reduz flicker) */
+.fx-prewarm{
+  position:fixed;inset:0;pointer-events:none;opacity:.001;
+  backdrop-filter:var(--bf, saturate(120%) blur(4px));
+  -webkit-backdrop-filter:var(--bf, saturate(120%) blur(4px));
+  transform:translateZ(0);will-change:transform;z-index:2147483647
+}
+
+@media (prefers-reduced-motion: reduce){
+  .page-search,.page-search-inner,.page-actions,.actdial{transition:none!important}
+  .actfab svg.plus{transition:none!important;transform:none!important}
+}
+</style>
+
+<div class="page-search" role="search" aria-label="{{ _('Search') }}">
+  <div class="page-search-row">
+    <div class="page-search-inner glass">
+      <svg class="page-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="7"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input type="text" id="globalQ" class="page-search-input" name="q"
+             value="{{ request.args.get('q','') if request is defined else '' }}"
+             placeholder="{{ _('Search') }}" autocomplete="off">
+    </div>
+
+    <div class="page-actions">
+      <button id="pageActionFab" class="actfab glass" type="button" aria-label="{{ _('Actions') }}" title="{{ _('Actions') }}">
+        <svg class="plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="12" y1="5"  x2="12" y2="19"></line>
+          <line x1="5"  y1="12" x2="19" y2="12"></line>
+        </svg>
+      </button>
+
+      <nav id="pageActionDial" class="actdial" aria-label="{{ _('Actions') }}">
+        <button class="actmini" type="button" data-action="csv" title="{{ _('Export spreadsheet') }}" aria-label="{{ _('Export spreadsheet') }}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <path d="M14 2v6h6"></path>
+          </svg>
+          <span>{{ _('Export') }}</span>
+        </button>
+
+        {% if _ep == 'list_sales' %}
+        <button class="actmini" type="button" data-action="print" title="{{ _('Print receipt') }}" aria-label="{{ _('Print receipt') }}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 9V2h12v7"></path>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+            <path d="M6 14h12v8H6z"></path>
+          </svg>
+          <span>{{ _('Print') }}</span>
+        </button>
+        {% endif %}
+
+        <button class="actmini" type="button" data-action="delete" title="{{ _('Delete') }}" aria-label="{{ _('Delete') }}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 6h18"></path>
+            <path d="M8 6V4h8v2"></path>
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+            <path d="M10 11v6"></path>
+            <path d="M14 11v6"></path>
+          </svg>
+          <span>{{ _('Delete') }}</span>
+        </button>
+
+        <button class="actmini" type="button" data-action="edit" title="{{ _('Edit') }}" aria-label="{{ _('Edit') }}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 20h9"></path>
+            <path d="M16.5 3.5a2.1 2 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+          </svg>
+          <span>{{ _('Edit') }}</span>
+        </button>
+      </nav>
+    </div>
+  </div>
+</div>
+
+<!-- Hints no bottom -->
+<div id="csvHint" class="fab-hint glass" hidden aria-live="polite">
+  <svg class="hint-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+    <path d="M14 2v6h6"></path>
+  </svg>
+  <div class="hint-body">
+    <div class="hint-title">{{ _('Export') }}</div>
+    <p class="hint-text">{{ _('Select items to export.') }}</p>
+  </div>
+  <div class="hint-actions">
+    <div class="hint-select-all">
+      <span id="csvSelectedCount" class="hint-count" aria-label="{{ _('Selected count') }}">0</span>
+      <label class="hint-check" title="{{ _('Select all') }}">
+        <input id="csvSelectAll" type="checkbox" aria-label="{{ _('Select all') }}">
+      </label>
+    </div>
+    <button type="button" class="hint-btn icon-only" data-fab-cancel="1" aria-label="{{ _('Cancel') }}" title="{{ _('Cancel') }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M18 6 6 18"></path>
+        <path d="M6 6l12 12"></path>
+      </svg>
+    </button>
+    <button type="button" class="hint-btn confirm icon-only" data-fab-confirm="csv" disabled aria-label="{{ _('Confirm') }}" title="{{ _('Confirm') }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20 6 9 17l-5-5"></path>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<div id="printHint" class="fab-hint glass" hidden aria-live="polite">
+  <svg class="hint-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M6 9V2h12v7"></path>
+    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+    <path d="M6 14h12v8H6z"></path>
+  </svg>
+  <div class="hint-body">
+    <div class="hint-title">{{ _('Print') }}</div>
+    <p class="hint-text">{{ _('Select a sale to print.') }}</p>
+  </div>
+  <div class="hint-actions">
+    <button type="button" class="hint-btn icon-only" data-fab-cancel="1" aria-label="{{ _('Cancel') }}" title="{{ _('Cancel') }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M18 6 6 18"></path>
+        <path d="M6 6l12 12"></path>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<div id="deleteHint" class="fab-hint glass" hidden aria-live="polite">
+  <svg class="hint-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 6h18"></path>
+    <path d="M8 6V4h8v2"></path>
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+    <path d="M10 11v6"></path>
+    <path d="M14 11v6"></path>
+  </svg>
+  <div class="hint-body">
+    <div class="hint-title">{{ _('Delete') }}</div>
+    <p class="hint-text">{{ _('Select items to delete.') }}</p>
+  </div>
+  <div class="hint-actions">
+    <div class="hint-select-all">
+      <span id="delSelectedCount" class="hint-count" aria-label="{{ _('Selected count') }}">0</span>
+      <label class="hint-check" title="{{ _('Select all') }}">
+        <input id="delSelectAll" type="checkbox" aria-label="{{ _('Select all') }}">
+      </label>
+    </div>
+    <button type="button" class="hint-btn icon-only" data-fab-cancel="1" aria-label="{{ _('Cancel') }}" title="{{ _('Cancel') }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M18 6 6 18"></path>
+        <path d="M6 6l12 12"></path>
+      </svg>
+    </button>
+    <button type="button" class="hint-btn confirm icon-only" data-fab-confirm="delete" disabled aria-label="{{ _('Confirm') }}" title="{{ _('Confirm') }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20 6 9 17l-5-5"></path>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<div id="editHint" class="fab-hint glass" hidden aria-live="polite">
+  <svg class="hint-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M12 20h9"></path>
+    <path d="M16.5 3.5a2.1 2 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+  </svg>
+  <div class="hint-body">
+    <div class="hint-title">{{ _('Edit') }}</div>
+    <p class="hint-text">{{ _('Select an item in the list to edit.') }}</p>
+  </div>
+  <div class="hint-actions">
+    <button type="button" class="hint-btn icon-only" data-fab-cancel="1" aria-label="{{ _('Cancel') }}" title="{{ _('Cancel') }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M18 6 6 18"></path>
+        <path d="M6 6l12 12"></path>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var d=document, w=window, html=d.documentElement;
+  var EP='{{ _ep|e }}';
+
+  var qs=function(s,root){try{return (root||d).querySelector(s)}catch(e){return null}};
+  var qsa=function(s,root){try{return Array.prototype.slice.call((root||d).querySelectorAll(s)||[])}catch(e){return []}};
+  var onReady=function(fn){ if(d.readyState==='loading') d.addEventListener('DOMContentLoaded',fn,{once:true}); else fn(); };
+  var raf2=function(fn){ (w.requestAnimationFrame||function(f){setTimeout(f,0)})(function(){ (w.requestAnimationFrame||function(f){setTimeout(f,0)})(fn); }); };
+  var fire=function(name,detail){ try{ d.dispatchEvent(new CustomEvent(name,{detail:detail||{}})); }catch(e){} };
+  var ev=function(type,bubbles){ try{return new Event(type,{bubbles:!!bubbles});}catch(e){var x=d.createEvent('Event');x.initEvent(type,!!bubbles,true);return x;} };
+  var pxRound=function(v){ var dpr=w.devicePixelRatio||1; return (Math.round(v*dpr)/dpr); };
+
+  var reduce=!!(w.matchMedia&&w.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  onReady(function(){
+    raf2(function(){
+      try{
+        html.classList.remove('fab-no-boot');
+        html.classList.remove('ps-boot');
+      }catch(e){}
+    });
+  });
+
+  (function(){
+    function prewarm(){
+      try{
+        if(!w.CSS||!CSS.supports) return;
+        var ok=CSS.supports('backdrop-filter: blur(4px)') || CSS.supports('-webkit-backdrop-filter: blur(4px)');
+        if(!ok) return;
+        var el=d.createElement('div'); el.className='fx-prewarm'; d.body.appendChild(el);
+        raf2(function(){ try{ el.remove(); }catch(e){} });
+      }catch(e){}
+    }
+    onReady(prewarm);
+  })();
+
+  (function(){
+    var scroller=qs('#appScroller')||qs('.app');
+    var pageSearch=qs('.page-search');
+    var pageRow=pageSearch?qs('.page-search-row',pageSearch):null;
+    if(!scroller || !pageSearch || !pageRow) return;
+
+    var revealed=false;
+    function revealOnce(){
+      if(revealed) return;
+      revealed=true;
+      raf2(function(){ try{ html.classList.remove('ps-boot'); }catch(e){} });
+    }
+
+    function getVarPx(name,fallback){
+      var v=''; try{ v=getComputedStyle(html).getPropertyValue(name)||''; }catch(e){}
+      var n=parseFloat(String(v).trim()); return isFinite(n)?n:(fallback||0);
+    }
+
+    function setOverlapVar(){
+      var row=pageRow||pageSearch;
+      var h=(row&&row.offsetHeight)?row.offsetHeight:(pageSearch.offsetHeight||0);
+      try{ html.style.setProperty('--page-search-h',h+'px'); }catch(e){}
+      try{ html.style.setProperty('--page-search-overlap',Math.max(0,h-10)+'px'); }catch(e){}
+    }
+
+    function getScrollbarW(){
+      var sb=0, sb2=0;
+      try{ sb = (w.innerWidth - (html && html.clientWidth ? html.clientWidth : w.innerWidth)) || 0; }catch(e){ sb=0; }
+      try{ sb2 = (scroller.offsetWidth - scroller.clientWidth) || 0; }catch(e){ sb2=0; }
+      sb = Math.max(0, sb); sb2 = Math.max(0, sb2);
+      return Math.max(sb, sb2);
+    }
+
+    function positionFloatingSearch(){
+      var container=qs('section.container',scroller)||qs('.container',scroller)||scroller;
+
+      var sr=scroller.getBoundingClientRect();
+      if(!sr||!isFinite(sr.width)||sr.width<10){ (w.requestAnimationFrame||setTimeout)(positionFloatingSearch,0); return; }
+
+      var cr=container.getBoundingClientRect();
+      if(!cr||!isFinite(cr.width)||cr.width<10||!isFinite(cr.left)) cr=sr;
+
+      var padTop=0; try{ padTop=parseFloat(getComputedStyle(scroller).paddingTop||'0')||0; }catch(e){}
+
+      var baseMax=getVarPx('--page-search-w',1022);
+      var gap=getVarPx('--page-search-gap',12);
+      var compactTotal=getVarPx('--page-search-compact-total',1022);
+
+      var actW=48;
+      try{
+        var actions=qs('.page-actions',pageSearch);
+        if(actions){
+          var ar=actions.getBoundingClientRect();
+          if(ar && isFinite(ar.width) && ar.width>0) actW=ar.width;
+        }
+      }catch(e){}
+
+      var searchW=Math.min(baseMax,Math.max(280,sr.width-48));
+
+      var sbw=getScrollbarW();
+      var safeEdge=12;
+      var safeRightPad=(sbw>0)?(sbw+10):16;
+
+      var vRight = (isFinite(w.innerWidth) ? w.innerWidth : sr.right);
+      var safeLeft = Math.max(sr.left, 0) + safeEdge;
+      var safeRight = Math.min(sr.right, vRight) - safeRightPad;
+
+      var avail=Math.max(0, safeRight - safeLeft);
+
+      var top=sr.top+padTop;
+      try{ html.style.setProperty('--page-search-top',pxRound(top)+'px'); }catch(e){}
+
+      var cx=cr.left+(cr.width/2);
+
+      var mqCompact = !!(w.matchMedia && w.matchMedia('(max-width:1120px)').matches);
+      var searchLeft = cx - (searchW/2);
+      var searchRight = cx + (searchW/2);
+
+      var rightEdge = mqCompact ? searchRight : (searchRight + gap + actW);
+      var leftEdge  = searchLeft;
+
+      var currentlyCompact = html.classList.contains('ps-compact');
+      var overlap = (rightEdge > safeRight) || (leftEdge < safeLeft);
+
+      if(currentlyCompact){
+        var rightOk = (mqCompact ? (searchRight <= (safeRight-10)) : (searchRight + gap + actW <= (safeRight-10)));
+        var leftOk  = (searchLeft >= (safeLeft+10));
+        if(rightOk && leftOk){
+          try{ html.classList.remove('ps-compact'); }catch(e){}
+          currentlyCompact=false;
+        }
+      }else{
+        if(overlap){
+          try{ html.classList.add('ps-compact'); }catch(e){}
+          currentlyCompact=true;
+        }
+      }
+
+      if(currentlyCompact){
+        var rowW = Math.min(compactTotal, Math.max(240, avail||compactTotal));
+        if(avail>0) rowW=Math.min(rowW, avail);
+
+        var minRow = Math.max(240, gap + actW + 180);
+        if(avail>0) rowW=Math.max(Math.min(avail,rowW), Math.min(avail,minRow));
+        else rowW=Math.max(rowW, minRow);
+
+        var half=rowW/2;
+        if(avail>0){
+          var minCx=safeLeft + half;
+          var maxCx=safeRight - half;
+          if(isFinite(minCx) && isFinite(maxCx) && maxCx>=minCx){
+            cx=Math.max(minCx, Math.min(maxCx, cx));
+          }
+        }
+
+        pageRow.style.top=pxRound(top)+'px';
+        pageRow.style.left=pxRound(cx)+'px';
+        pageRow.style.transform='translateX(-50%)';
+        pageRow.style.width=pxRound(rowW)+'px';
+        pageRow.style.margin='0';
+        pageRow.style.zIndex='1600';
+        pageRow.style.pointerEvents='auto';
+        revealOnce();
+        return;
+      }
+
+      pageRow.style.top=pxRound(top)+'px';
+      pageRow.style.left=pxRound(cx)+'px';
+      pageRow.style.transform='translateX(-50%)';
+      pageRow.style.width=pxRound(searchW)+'px';
+      pageRow.style.margin='0';
+      pageRow.style.zIndex='1600';
+      pageRow.style.pointerEvents='auto';
+      revealOnce();
+    }
+
+    var ticking=false;
+    function setScrolledFlag(){
+      if(ticking) return;
+      ticking=true;
+      (w.requestAnimationFrame||setTimeout)(function(){
+        ticking=false;
+        var y=scroller.scrollTop||0;
+        d.body.classList.toggle('app-scrolled',y>2);
+      },0);
+    }
+
+    function relayoutSoon(){
+      setOverlapVar();
+      positionFloatingSearch();
+      (w.requestAnimationFrame||setTimeout)(positionFloatingSearch,0);
+      setTimeout(positionFloatingSearch,240);
+    }
+
+    setOverlapVar(); positionFloatingSearch(); setScrolledFlag();
+    raf2(positionFloatingSearch);
+
+    try{
+      var ro=new ResizeObserver(function(){ relayoutSoon(); });
+      ro.observe(pageSearch); ro.observe(pageRow);
+    }catch(e){}
+    scroller.addEventListener('scroll',setScrolledFlag,{passive:true});
+    w.addEventListener('resize',relayoutSoon);
+
+    var btnSide=qs('#btnSidebarToggle');
+    if(btnSide) btnSide.addEventListener('click',function(){ (w.requestAnimationFrame||setTimeout)(relayoutSoon,0); });
+
+    var side=qs('#sideNav');
+    if(side) side.addEventListener('transitionend',function(ev){
+      if(ev.propertyName==='width') relayoutSoon();
+    });
+  })();
+
+  // ===== selection tools recenter (bottom hints) =====
+  (function(){
+    function getContentCenterX(){
+      var app=qs('#appScroller')||qs('.app');
+      if(!app) return Math.round(w.innerWidth/2);
+      var container=qs('section.container',app)||qs('.container',app)||app;
+      var r=container.getBoundingClientRect();
+      if(!r||!isFinite(r.left)||!isFinite(r.width)||r.width<10){
+        var ar=app.getBoundingClientRect();
+        return Math.round(ar.left+ar.width/2);
+      }
+      return Math.round(r.left+r.width/2);
+    }
+    function recenter(){
+      var cx=getContentCenterX();
+      ['editHint','printHint','deleteHint','csvHint'].forEach(function(id){
+        var el=qs('#'+id); if(!el) return;
+        el.style.left=cx+'px'; el.style.transform='translateX(-50%)'; el.style.right='auto';
+      });
+    }
+    function soon(){ recenter(); setTimeout(recenter,240); (w.requestAnimationFrame||setTimeout)(recenter,0); }
+    onReady(soon);
+    w.addEventListener('resize',soon);
+
+    var btn=qs('#btnSidebarToggle'); if(btn) btn.addEventListener('click',soon);
+    var side=qs('#sideNav'); if(side) side.addEventListener('transitionend',function(ev){ if(ev.propertyName==='width') recenter(); });
+
+    try{
+      var cards=qs('#cards');
+      if(cards) new MutationObserver(recenter).observe(cards,{childList:true,subtree:false});
+    }catch(e){}
+  })();
+
+  // ===== search sync (top floating -> page input or fallback filter) =====
+  (function(){
+    var topQ=qs('#globalQ'); if(!topQ||topQ.disabled) return;
+    var pageQ=qs('#q');
+
+    function setURLParam(q){
+      try{
+        var u=new URL(location.href);
+        if(q) u.searchParams.set('q',q); else u.searchParams.delete('q');
+        history.replaceState(null,'',u);
+      }catch(e){}
+    }
+    function dispatchInput(el){ try{ el.dispatchEvent(ev('input',true)); }catch(e){} }
+    function normal(t){
+      return (t||'').normalize('NFD').replace(/[\u00B7\u0300-\u036f]/g,'').toLowerCase();
+    }
+    // ✅ esmaece em vez de sumir no corte a cada tecla digitada; .hidden é
+    // aplicada/removida na hora (outros trechos leem essa classe pra saber
+    // quem está visível), só o .hide-done (que tira do layout) é adiado até
+    // a transição de opacidade terminar.
+    function setCardHidden(card, hide){
+      clearTimeout(card.__hideTimer);
+      if(hide){
+        card.classList.add('hidden');
+        if(w.isReduceMotion && w.isReduceMotion()){ card.classList.add('hide-done'); return; }
+        card.__hideTimer=setTimeout(function(){ card.classList.add('hide-done'); },140);
+      }else{
+        card.classList.remove('hide-done');
+        card.classList.remove('hidden');
+      }
+    }
+    function fallbackFilter(q){
+      var wrap=qs('#cards'); if(!wrap) return;
+      var qq=normal((q||'').trim());
+      qsa('.card',wrap).forEach(function(card){
+        if(!qq){ setCardHidden(card,false); return; }
+        var ds=''; try{ ds=Object.values(card.dataset||{}).join(' '); }catch(e){}
+        var tx=card.textContent||'';
+        var hay=normal(ds+' '+tx);
+        setCardHidden(card,!hay.includes(qq));
+      });
+      if(typeof w.recalcSubtotals==='function') w.recalcSubtotals();
+      try{ d.dispatchEvent(new CustomEvent('list:filtered',{detail:{q:q||''}})); }catch(e){}
+    }
+    function apply(q){
+      q=q||'';
+      setURLParam(q);
+      if(pageQ && pageQ!==topQ){
+        if(pageQ.value!==q) pageQ.value=q;
+        dispatchInput(pageQ);
+      }else{
+        fallbackFilter(q);
+      }
+    }
+
+    var initQ='';
+    try{ initQ=(new URLSearchParams(location.search)).get('q')||''; }catch(e){}
+    if(!initQ) initQ=topQ.value||'';
+    topQ.value=initQ;
+
+    try{
+      var wrap=pageQ&&pageQ.closest&&pageQ.closest('.searchbar');
+      if(wrap) wrap.style.display='none';
+    }catch(e){}
+
+    topQ.addEventListener('input',function(){ apply(topQ.value||''); });
+    apply(initQ);
+  })();
+
+  // ===== FAB + selection hints (exclusive actions, legacy bulk compatibility) =====
+  (function(){
+    var fab=qs('#pageActionFab'), dial=qs('#pageActionDial');
+    if(!fab||!dial) return;
+
+    var open=false, activeAction=null;
+
+    function setOpen(v){
+      open=!!v;
+      dial.dataset.open=open?'1':'0';
+      fab.dataset.open=open?'1':'0';
+    }
+
+    function hintIdFor(a){ return a==='csv'?'csvHint':a==='print'?'printHint':a==='delete'?'deleteHint':a==='edit'?'editHint':''; }
+
+    // ✅ centraliza os hints sobre a LISTA, não a janela toda — mesma lógica
+    // usada pelo botão voltar ao topo (getContentCenterX leva em conta a
+    // largura da sidebar).
+    function repositionHints(){
+      try{
+        var x=w.getContentCenterX?w.getContentCenterX():Math.round(window.innerWidth/2);
+        ['csvHint','printHint','deleteHint','editHint'].forEach(function(id){
+          var el=qs('#'+id); if(el) el.style.left=x+'px';
+        });
+      }catch(e){}
+    }
+    repositionHints();
+    window.addEventListener('resize', repositionHints);
+    try{
+      var __sideNav=qs('#sideNav');
+      if(__sideNav) __sideNav.addEventListener('transitionend', function(ev){ if(ev.propertyName==='width') repositionHints(); });
+    }catch(e){}
+
+    function showHint(a){
+      var el=qs('#'+hintIdFor(a)); if(!el) return;
+      try{
+        repositionHints();
+        el.style.display='';
+        if(w.animateInSlime) w.animateInSlime(el); else el.hidden=false;
+      }catch(e){}
+    }
+    function hideHint(a){
+      var el=qs('#'+hintIdFor(a)); if(!el) return;
+      try{
+        if(w.animateOutSlime) w.animateOutSlime(el); else el.hidden=true;
+      }catch(e){}
+    }
+
+    function safeHideKnownOverlays(){
+      ['editHint','printHint','deleteHint','csvHint','bulkPanel'].forEach(function(id){
+        var el=qs('#'+id); if(!el) return;
+        try{ el.hidden=true; }catch(e){}
+        try{ el.style.display='none'; }catch(e){}
+        try{ el.dataset.open='0'; }catch(e){}
+        try{ el.removeAttribute('data-open'); }catch(e){}
+      });
+    }
+
+    function tryClickAny(selectors){
+      for(var i=0;i<selectors.length;i++){
+        var b=qs(selectors[i]);
+        if(b && typeof b.click==='function'){ try{ b.click(); }catch(e){} return true; }
+      }
+      return false;
+    }
+    function tryCancelUI(){
+      return tryClickAny([
+        '#bulkPanel [data-action="cancel"]','#bulkPanel [data-cancel]','#bulkPanel .cancel','.bulk-cancel',
+        '#bulkCancel','#btnBulkCancel','#btnCancelBulk','[data-bulk-cancel]'
+      ]);
+    }
+    function trySelectAllUI(){
+      return tryClickAny([
+        '#bulkPanel [data-action="toggleAll"]','#bulkPanel [data-action="selectAll"]','#bulkPanel [data-select-all]',
+        '#bulkPanel .select-all','#bulkSelectAll','#btnSelectAll','[data-bulk-select-all]'
+      ]);
+    }
+
+    function clearModeMarkers(){
+      try{ d.body.classList.remove('bulk-mode','selection-mode','selecting','mode-edit','mode-delete','mode-print','mode-csv'); }catch(e){}
+      try{
+        d.body.removeAttribute('data-mode');
+        d.body.removeAttribute('data-action');
+        d.body.removeAttribute('data-bulk');
+        d.body.removeAttribute('data-fab-action');
+      }catch(e){}
+    }
+
+    function uniqList(list){
+      var seen=new Set(), out=[];
+      for(var i=0;i<list.length;i++){
+        var x=list[i];
+        if(x && !seen.has(x)){ seen.add(x); out.push(x); }
+      }
+      return out;
+    }
+
+    function getSelectionCheckboxes(){
+      var root=qs('#cards')||d;
+      var selectors=[
+        '#cards input[type="checkbox"]',
+        'input[type="checkbox"][data-select]',
+        'input[type="checkbox"][data-row-select]',
+        'input[type="checkbox"][name="select"]',
+        'input[type="checkbox"][name="selected"]',
+        'input[type="checkbox"].row-select',
+        'input[type="checkbox"].select',
+        'input[type="checkbox"].sel',
+        'input[type="checkbox"].bulk',
+        'input[type="checkbox"].bulk-select',
+        'input[type="checkbox"][aria-label*="select" i]',
+        'input[type="checkbox"][aria-label*="sele" i]'
+      ];
+
+      var list=[];
+      selectors.forEach(function(sel){
+        qsa(sel,root).forEach(function(el){
+          if(!el) return;
+          if(el.id==='csvSelectAll'||el.id==='delSelectAll') return;
+          list.push(el);
+        });
+      });
+
+      return uniqList(list);
+    }
+
+    function getSelectableCards(){
+      var root=qs('#cards')||d;
+      var cards=qsa('#cards .card',root);
+      return cards||[];
+    }
+
+    function isCardSelected(card){
+      if(!card) return false;
+      try{
+        if(card.classList.contains('selected')) return true;
+        if(card.classList.contains('is-selected')) return true;
+        if(card.classList.contains('isSelected')) return true;
+        if(card.classList.contains('bulk-selected')) return true;
+        if(card.classList.contains('checked')) return true;
+        if(card.classList.contains('active-selected')) return true;
+      }catch(e){}
+      try{ if((card.getAttribute('aria-selected')||'') === 'true') return true; }catch(e){}
+      try{
+        var ds=card.dataset||{};
+        var v=(ds.selected||ds.isSelected||ds.checked||ds.active||'')+'';
+        v=v.toLowerCase();
+        if(v==='1'||v==='true'||v==='yes'||v==='on') return true;
+      }catch(e){}
+      return false;
+    }
+
+    function getSelectedCards(){
+      var root=qs('#cards')||d;
+      var list=[];
+      [
+        '#cards .card.selected',
+        '#cards .card.is-selected',
+        '#cards .card.bulk-selected',
+        '#cards .card[aria-selected="true"]',
+        '#cards .card[data-selected="1"]',
+        '#cards .card[data-selected="true"]',
+        '#cards .card[data-checked="1"]',
+        '#cards .card[data-checked="true"]'
+      ].forEach(function(sel){
+        qsa(sel,root).forEach(function(el){ if(el) list.push(el); });
+      });
+
+      if(!list.length){
+        var all=getSelectableCards();
+        for(var i=0;i<all.length;i++){
+          if(isCardSelected(all[i])) list.push(all[i]);
+        }
+      }
+      return uniqList(list);
+    }
+
+    function getSelectedCount(){
+      var cbs=getSelectionCheckboxes();
+      if(cbs.length){
+        var n=0;
+        for(var j=0;j<cbs.length;j++) if(cbs[j] && cbs[j].checked) n++;
+        return n;
+      }
+      var cards=getSelectedCards();
+      if(cards.length) return cards.length;
+
+      var els=[qs('[data-selected-count]'),qs('#selectedCount'),qs('#selCount'),qs('#bulkCount')].filter(Boolean);
+      for(var i=0;i<els.length;i++){
+        var t=(els[i].textContent||'').trim();
+        var nn=parseInt(t,10);
+        if(isFinite(nn)) return nn;
+      }
+      return 0;
+    }
+
+    function getSelectedIds(){
+      var cbs=getSelectionCheckboxes(), ids=[];
+      if(cbs.length){
+        for(var i=0;i<cbs.length;i++){
+          var cb=cbs[i]; if(!cb||!cb.checked) continue;
+          var id='';
+          try{ id=(cb.value || (cb.dataset&&(cb.dataset.id||cb.dataset.saleId||cb.dataset.clientId)) || '')+''; }catch(e){ id=''; }
+          if(!id){
+            try{
+              var card=cb.closest&&cb.closest('.card');
+              if(card) id=((card.dataset&&(card.dataset.id||card.dataset.saleId||card.dataset.clientId))||'')+'';
+            }catch(e){}
+          }
+          if(id) ids.push(id);
+        }
+        return ids;
+      }
+
+      var cards=getSelectedCards();
+      for(var k=0;k<cards.length;k++){
+        var card2=cards[k], id2='';
+        try{
+          var ds=card2.dataset||{};
+          id2=(ds.id||ds.saleId||ds.clientId||ds.key||ds.pk||'')+'';
+        }catch(e){ id2=''; }
+        if(id2) ids.push(id2);
+      }
+      return ids;
+    }
+
+    function setAllCheckboxes(checked){
+      var cbs=getSelectionCheckboxes();
+      if(!cbs.length) return;
+      for(var i=0;i<cbs.length;i++){
+        var cb=cbs[i]; if(!cb) continue;
+        if(cb.checked===checked) continue;
+        cb.checked=checked;
+        try{ cb.dispatchEvent(ev('change',true)); }catch(e){}
+      }
+    }
+
+    function getTotalSelectable(){
+      var cbs=getSelectionCheckboxes();
+      if(cbs.length) return cbs.length;
+      return getSelectableCards().length;
+    }
+
+    function updateMultiHintUI(action){
+      var isCsv=action==='csv', isDel=action==='delete';
+      if(!isCsv && !isDel) return;
+
+      var count=getSelectedCount();
+      var total=getTotalSelectable();
+
+      var countEl=qs('#'+(isCsv?'csvSelectedCount':'delSelectedCount'));
+      if(countEl) countEl.textContent=(window.formatSelCount ? formatSelCount(count) : String(count));
+
+      var confirmBtn=qs('[data-fab-confirm="'+action+'"]');
+      if(confirmBtn) confirmBtn.disabled=(count<=0);
+
+      var selAll=qs('#'+(isCsv?'csvSelectAll':'delSelectAll'));
+      if(selAll) selAll.checked=(total>0 && count===total);
+    }
+
+    d.addEventListener('change',function(e){
+      if(!activeAction) return;
+      if(activeAction!=='csv' && activeAction!=='delete') return;
+      var t=e.target;
+      if(!t) return;
+      if(t.id==='csvSelectAll'||t.id==='delSelectAll') return;
+      if(t.type==='checkbox' || (t.closest && t.closest('#cards'))) updateMultiHintUI(activeAction);
+    },{passive:true});
+
+    d.addEventListener('click',function(e){
+      if(!activeAction) return;
+      if(activeAction!=='csv' && activeAction!=='delete') return;
+      var t=e.target;
+      if(!t) return;
+      var wrap = t.closest ? t.closest('#cards') : null;
+      if(!wrap) return;
+      (w.requestAnimationFrame||setTimeout)(function(){
+        if(activeAction) updateMultiHintUI(activeAction);
+      },0);
+    },{capture:true});
+
+    function tryConfirmUI(action){
+      var clicked=tryClickAny([
+        '#bulkPanel [data-action="confirm"]','#bulkPanel [data-confirm]','#bulkPanel .confirm',
+        '#bulkConfirm','#btnBulkConfirm','#btnConfirmBulk','[data-bulk-confirm]','[data-confirm-selection]'
+      ]);
+      if(clicked) return true;
+
+      var ids=getSelectedIds();
+      fire('fab:confirm',{action:action,ep:EP,ids:ids});
+      return ids.length>0;
+    }
+
+    function deactivate(action){
+      if(!action) return;
+
+      tryCancelUI();
+      clearModeMarkers();
+
+      hideHint(action);
+      safeHideKnownOverlays();
+
+      try{ if(typeof w.onFabActionDeactivate==='function') w.onFabActionDeactivate(action,EP); }catch(e){}
+      fire('fab:deactivate',{action:action,ep:EP});
+    }
+
+    function activate(action){
+      activeAction=action;
+      try{ d.body.dataset.fabAction=action; }catch(e){}
+      showHint(action);
+
+      if(action==='csv' || action==='delete'){
+        updateMultiHintUI(action);
+        setTimeout(function(){ if(activeAction===action) updateMultiHintUI(action); },180);
+        (w.requestAnimationFrame||setTimeout)(function(){ if(activeAction===action) updateMultiHintUI(action); },0);
+      }
+
+      try{ if(typeof w.onFabActionActivate==='function') w.onFabActionActivate(action,EP); }catch(e){}
+      fire('fab:activate',{action:action,ep:EP});
+    }
+
+    function isSticky(action){ return action==='edit'||action==='delete'||action==='csv'||action==='print'; }
+
+    function runExclusive(action, fn){
+      if(activeAction && activeAction!==action){ deactivate(activeAction); activeAction=null; }
+      if(activeAction===action){ deactivate(action); activeAction=null; return; }
+      activate(action);
+      try{ fn(); }
+      finally{
+        if(!isSticky(action)){ deactivate(action); activeAction=null; }
+      }
+    }
+
+    w.__fabDeactivateActive=function(){ if(activeAction){ deactivate(activeAction); activeAction=null; } };
+    w.__fabGetActiveAction=function(){ return activeAction||''; };
+
+    d.addEventListener('click',function(e){
+      var btn=e.target&&e.target.closest?e.target.closest('[data-fab-cancel="1"]'):null;
+      if(!btn) return;
+      e.preventDefault(); e.stopPropagation();
+      if(activeAction){ deactivate(activeAction); activeAction=null; }
+      setOpen(false);
+    },{capture:true});
+
+    d.addEventListener('click',function(e){
+      var btn=e.target&&e.target.closest?e.target.closest('[data-fab-confirm]'):null;
+      if(!btn) return;
+      e.preventDefault(); e.stopPropagation();
+
+      var a=String(btn.getAttribute('data-fab-confirm')||'');
+      if(!a || !activeAction || activeAction!==a) return;
+
+      var ok=tryConfirmUI(a);
+      if(!ok){
+        if(a==='csv') alert('{{ _("Select items to export.") }}');
+        if(a==='delete') alert('{{ _("Select items to delete.") }}');
+        return;
+      }
+      deactivate(activeAction); activeAction=null; setOpen(false);
+    },{capture:true});
+
+    d.addEventListener('change',function(e){
+      var t=e.target;
+      if(!t) return;
+      if(t.id!=='csvSelectAll' && t.id!=='delSelectAll') return;
+
+      e.stopPropagation();
+      var action=(t.id==='csvSelectAll')?'csv':'delete';
+      if(!activeAction || activeAction!==action) return;
+
+      var wants=!!t.checked;
+      var did=trySelectAllUI();
+      if(!did) setAllCheckboxes(wants);
+      updateMultiHintUI(action);
+    },{capture:true});
+
+    fab.addEventListener('click',function(e){ e.stopPropagation(); setOpen(!open); });
+    d.addEventListener('click',function(e){
+      if(!open) return;
+      if(fab.contains(e.target) || dial.contains(e.target)) return;
+      setOpen(false);
+    });
+    d.addEventListener('keydown',function(e){
+      if(e.key==='Escape'){
+        setOpen(false);
+        if(activeAction){ deactivate(activeAction); activeAction=null; }
+      }
+    });
+
+    dial.addEventListener('click',function(e){
+      var mini=e.target&&e.target.closest?e.target.closest('.actmini'):null;
+      if(!mini) return;
+      e.stopPropagation();
+      setOpen(false);
+
+      var a=String(mini.dataset.action||''); if(!a) return;
+
+      runExclusive(a,function(){
+        try{
+          if(a==='edit'   && typeof w.onTopActionEdit==='function')   return w.onTopActionEdit(EP);
+          if(a==='delete' && typeof w.onTopActionDelete==='function') return w.onTopActionDelete(EP);
+          if(a==='csv'    && typeof w.onTopActionCsv==='function')    return w.onTopActionCsv(EP);
+          if(a==='print'  && typeof w.onTopActionPrint==='function')  return w.onTopActionPrint(EP);
+        }catch(e){}
+
+        if(a==='edit')   alert('{{ _("Select an item in the list to edit.") }}');
+        if(a==='delete') alert('{{ _("Select items to delete.") }}');
+        if(a==='csv')    alert('{{ _("Select items to export.") }}');
+        if(a==='print')  alert('{{ _("Select a sale to print.") }}');
+      });
+    });
+  })();
+})();
+</script>
+
+
+{% set list_ep = 'list_sales' if mode == 'sales' else 'list_clients' %}
+<section class="container">
+
+  <!-- Subtotais -->
+  {% if mode == 'sales' %}
+  <div class="subtotals">
+    <div><strong>{{ _('Gross') }}:</strong> <span id="subtotalGrossBox">{{ subtotal_gross }}</span></div>
+    <div><strong>{{ _('Final') }}:</strong> <span id="subtotalFinalBox">{{ subtotal_final }}</span></div>
+  </div>
+  {% else %}
+  <div class="subtotals">
+    <div><strong>{{ _('Clients') }}:</strong> <span id="subtotalClientsBox">0</span></div>
+    <div><strong>{{ _('Sales') }}:</strong> <span id="subtotalSalesBox">0</span></div>
+  </div>
+  {% endif %}
+
+  <!-- Filtros -->
+  <section class="controls">
+    <div class="filters">
+      <div class="legend">{{ _('Order') }}</div>
+      <div class="chiprow">
+        {% set order_field = field if mode == 'sales' else 'created_at' %}
+        <a class="chip icon-text {% if order=='asc' %}active{% endif %}" aria-label="{{ _('Ascending') }}" title="{{ _('Ascending') }}"
+           href="{{ url_for(list_ep, q=q, field=order_field, order='asc', month=month or '', year=year or '') }}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 19V5"></path>
+            <path d="M5 12l7-7 7 7"></path>
+          </svg>
+          <span>{{ _('Ascending') }}</span>
+        </a>
+        <a class="chip icon-text {% if order=='desc' %}active{% endif %}" aria-label="{{ _('Descending') }}" title="{{ _('Descending') }}"
+           href="{{ url_for(list_ep, q=q, field=order_field, order='desc', month=month or '', year=year or '') }}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 5v14"></path>
+            <path d="M19 12l-7 7-7-7"></path>
+          </svg>
+          <span>{{ _('Descending') }}</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="filters">
+      <div class="legend">{{ _('Month') }}</div>
+      <div class="chiprow">
+        {% if mode == 'sales' %}
+        <a class="chip {% if not month %}active{% endif %}" href="{{ url_for(list_ep, q=q, field=field, order=order, month='', year=year or '') }}">{{ _('All') }}</a>
+        {% for num, month_name in MONTHS %}
+          <a class="chip {% if month==num %}active{% endif %}" href="{{ url_for(list_ep, q=q, field=field, order=order, month=num, year=year or '') }}">{{ month_name }}</a>
+        {% endfor %}
+        {% else %}
+        <a class="chip {% if not month %}active{% endif %}" href="{{ url_for(list_ep, q=q, field='created_at', order=order, month='', year=year or '') }}">{{ _('All') }}</a>
+        {% for num, month_name in MONTHS %}
+          <a class="chip {% if month==num %}active{% endif %}" href="{{ url_for(list_ep, q=q, field='created_at', order=order, month=num, year=year or '') }}">{{ month_name }}</a>
+        {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="filters" style="margin-bottom:6px">
+      <div class="legend">{{ _('Year') }}</div>
+      <div class="chiprow">
+        {% if mode == 'sales' %}
+        <a class="chip {% if not year %}active{% endif %}" href="{{ url_for(list_ep, q=q, field=field, order=order, month=month or '', year='') }}">{{ _('All') }}</a>
+        {% for y in YEARS %}
+          <a class="chip {% if year==y %}active{% endif %}" href="{{ url_for(list_ep, q=q, field=field, order=order, month=month or '', year=y) }}">{{ y }}</a>
+        {% endfor %}
+        {% else %}
+        <a class="chip {% if not year %}active{% endif %}" href="{{ url_for(list_ep, q=q, field='created_at', order=order, month=month or '', year='') }}">{{ _('All') }}</a>
+        {% for y in YEARS %}
+          <a class="chip {% if year==y %}active{% endif %}" href="{{ url_for(list_ep, q=q, field='created_at', order=order, month=month or '', year=y) }}">{{ y }}</a>
+        {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <!-- Lista (cards) -->
+  <div id="cards" class="list">
+    {% if mode == 'sales' %}
+      {% if not sales %}
+        <div class="card empty-state"><div class="who">{{ _('No sales yet') }}</div></div>
+      {% else %}
+        {% for r in sales %}
+        <article class="card" id="sale-{{ r.id }}"
+                 data-id="{{ r.id }}"
+                 data-code="{{ r.code|default('') }}"
+                 data-name="{{ r.name|default('') }}"
+                 data-product="{{ r.product|default('') }}"
+                 data-desc="{{ r.sale_description|default('') }}"
+                 data-amount="{{ r.amount|default(0.0) }}"
+                 data-final="{{ r.final_amount|default(r.amount)|default(0.0) }}"
+                 data-created="{{ r.created_at|dt('short') }}">
+          <div class="who">{{ r.name|default('') }}</div>
+          <div class="when">{{ r.created_at|dt('short') }}</div>
+          <div class="desc">{{ r.product|default('') }} — {{ r.sale_description or _('(Blank)') }}</div>
+          <div class="val">{{ r.final_amount|default(r.amount)|default(0) }}</div>
+          <div class="select"><input type="checkbox" class="row-check" value="{{ r.id }}" aria-label="{{ _('Select') }}"></div>
+        </article>
+        {% endfor %}
+      {% endif %}
+    {% else %}
+      {% if not clients %}
+        <div class="card empty-state"><div class="who">{{ _('No clients yet') }}</div></div>
+      {% else %}
+        {% for c in clients %}
+        <article class="card" id="client-{{ c.code }}"
+                 data-code="{{ c.code }}"
+                 data-name="{{ c.name|default('') }}"
+                 data-address="{{ c.address|default('') }}"
+                 data-contact="{{ c.contact|default('') }}"
+                 data-desc="{{ c.client_description|default('') }}"
+                 data-sales="{{ c.sales_in_period|default(0) }}"
+                 data-created="{{ c.created_at|dt('short') }}">
+          <div class="who">{{ c.name }}</div>
+          <div class="when">{{ c.created_at|dt('short') }}</div>
+          <div class="desc">{{ c.address or _('(Blank)') }} — {{ c.contact or _('(Blank)') }} — {{ c.client_description or _('(Blank)') }}</div>
+          <div class="count">{{ c.sales_in_period }}</div>
+          <div class="select"><input type="checkbox" class="row-check" value="{{ c.code }}" aria-label="{{ _('Select') }}"></div>
+        </article>
+        {% endfor %}
+      {% endif %}
+    {% endif %}
+  </div>
+</section>
+
+
+<!-- Voltar ao topo -->
+<button type="button" id="btnScrollTop" class="scroll-top-btn" aria-label="{{ _('Back to top') }}" title="{{ _('Back to top') }}">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M6 15l6-6 6 6"></path>
+  </svg>
+</button>
+
+<!-- Bulk overlay -->
+<div id="bulkPanel" class="bulk-panel" role="region" aria-live="polite">
+  <label class="all" id="bulkAllWrap"><input type="checkbox" id="bulkAll" class="bulk-check"><span>{{ _('All') }}</span></label>
+  <span class="count" id="selCount">0</span>
+  <button id="btnBulkCancel" class="ghost icon-only" aria-label="{{ _('Cancel') }}" title="{{ _('Cancel') }}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M18 6 6 18"></path>
+      <path d="M6 6l12 12"></path>
+    </svg>
+  </button>
+  <button id="btnBulkConfirm" class="primary icon-only" disabled aria-label="{{ _('Confirm') }}" title="{{ _('Confirm') }}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M20 6 9 17l-5-5"></path>
+    </svg>
+  </button>
+</div>
+
+<!-- Hints de edit/print: removidos daqui (duplicavam #editHint/#printHint do searchbar.html,
+     que já cobrem a mesma função com ícone+título+descrição). O estado editArmed/printArmed
+     continua controlado abaixo, só a UI própria (redundante) foi removida. -->
+
+{% if mode == 'sales' %}
+<!-- ===== Print preview popup (só no modo sales) ===== -->
+<div id="printPicker" class="picker-backdrop" aria-hidden="true">
+  <section id="printPreviewSheet" class="picker-sheet" role="dialog" aria-modal="true" aria-labelledby="print-title">
+    <header class="picker-header">
+      <h3 id="print-title" class="picker-title">{{ _('Receipt') }}</h3>
+      <button type="button" class="popup-close" aria-label="{{ _('Close') }}" onclick="closePrint()"></button>
+    </header>
+
+    <div class="picker-body">
+      <div class="print-scroll-wrap">
+        <div id="printScroll">
+          <input type="file" id="imgInput" accept="image/*" hidden>
+          <input type="hidden" id="imgDataUrlHidden" value="">
+          <input type="hidden" id="imgDataUrlOrig" value="">
+<div id="ticket" class="ticket">
+            <div class="ticket-top">
+              <div id="ticketImgDrop" class="ticket-img-drop">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                  <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+              </div>
+              <button type="button" id="btnInsert" class="img-ctl" onclick="document.getElementById('imgInput').click()" aria-label="{{ _('Add') }}" title="{{ _('Add') }}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span>{{ _('Add') }}</span>
+              </button>
+              <button type="button" id="btnClear" class="img-ctl" style="display:none" onclick="clearImg()" aria-label="{{ _('Remove image') }}" title="{{ _('Remove image') }}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M18 6 6 18"></path>
+                  <path d="M6 6l12 12"></path>
+                </svg>
+                <span>{{ _('Remove') }}</span>
+              </button>
+              <img id="ticketImg" alt="{{ _('Receipt image') }}" style="display:none"/>
+            </div>
+            <div class="t-lines">
+              <div id="tStoreName" class="editable ph t-strong" contenteditable="true" data-ph="{{ _('STORE NAME (e.g., Example Optics)') }}"></div>
+              <div id="tStorePhone" class="editable ph" contenteditable="true" data-ph="{{ _('PHONE: (00) 0000-0000') }}"></div>
+              <div id="tStoreAddr1" class="editable ph" contenteditable="true" data-ph="{{ _('ADDRESS (e.g., Example St, 123)') }}"></div>
+              <div id="tStoreZIPTAX" class="editable ph" contenteditable="true" data-ph="{{ _('TAX ID: 00.000.000/0000-00') }}"></div>
+              <div class="t-section">{{ _('CLIENT') }}:</div>
+              <div id="tClientCode">{{ _('CODE') }}: —</div>
+              <div id="tClientName">{{ _('NAME') }}: —</div>
+              <div class="t-section">{{ _('SALE') }}:</div>
+              <div id="tProduct">{{ _('PRODUCT') }}: —</div>
+              <div id="tDescription">{{ _('DESCRIPTION') }}: —</div>
+              <div id="tPrice">{{ _('PRICE') }}: —</div>
+            </div>
+          </div>
+        </div>
+
+        <div id="psbTrack" aria-hidden="true">
+          <button id="psbUp"   type="button" aria-label="{{ _('Navigation') }}"></button>
+          <div id="psbThumb"></div>
+          <button id="psbDown" type="button" aria-label="{{ _('Navigation') }}"></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="picker-actions" style="justify-content:center">
+      <button type="button" class="primary icon-text" onclick="submitPdf()" aria-label="{{ _('Generate PDF') }}" title="{{ _('Generate PDF') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="6 9 6 2 18 2 18 9"></polyline>
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+          <rect x="6" y="14" width="12" height="8"></rect>
+        </svg>
+        <span>{{ _('Generate PDF') }}</span>
+      </button>
+    </div>
+  </section>
+</div>
+{% endif %}
+
+<!-- ===== View popup ===== -->
+<div id="viewPicker" class="picker-backdrop" aria-hidden="true">
+  <section id="viewSheet" class="picker-sheet view-sheet" role="dialog" aria-modal="true" aria-labelledby="view-title">
+    <header class="popup-header">
+      <h3 id="view-title" class="popup-title">{{ _('Sale') if mode == 'sales' else _('Client') }}</h3>
+      <button type="button" class="popup-close" aria-label="{{ _('Close') }}" onclick="closeView()"></button>
+    </header>
+
+    <div class="picker-body scroll">
+      <div class="sheet-inner">
+        {% if mode == 'sales' %}
+        <!-- ✅ Mesma lógica de layout do formulário "Sale" em sale.html:
+             grade 2 colunas (Produto/Valor) + campo de largura total abaixo. -->
+        <div class="kvgrid">
+          <div class="kv">
+            <div class="label">{{ _('Product') }}</div>
+            <div id="vTitleName" class="value">—</div>
+          </div>
+          <div class="kv">
+            <div class="label">{{ _('Client') }}</div>
+            <div id="vName" class="value">—</div>
+          </div>
+          <div class="kv">
+            <div class="label">{{ _('Amount') }}</div>
+            <div class="value"><span id="vAmount">—</span> <span id="vAmountOld" class="amount-old"></span></div>
+          </div>
+          <div class="kv wide">
+            <div class="label">{{ _('Description') }}</div>
+            <div id="vDesc" class="value">—</div>
+          </div>
+        </div>
+        {% else %}
+        <!-- ✅ Mesma lógica de layout do formulário "Cliente" em sale.html:
+             campos empilhados em coluna única. -->
+        <div class="kvgrid stacked">
+          <div class="kv">
+            <div class="label">{{ _('Name') }}</div>
+            <div id="vTitleName" class="value">—</div>
+          </div>
+          <div class="kv">
+            <div class="label">{{ _('Contact') }}</div>
+            <div id="vContact" class="value">—</div>
+          </div>
+          <div class="kv">
+            <div class="label">{{ _('Address') }}</div>
+            <div id="vAddr" class="value">—</div>
+          </div>
+          <div class="kv">
+            <div class="label">{{ _('Description') }}</div>
+            <div id="vDesc" class="value">—</div>
+          </div>
+          <div class="kv">
+            <div class="label">{{ _('Sales') }}</div>
+            <div id="vSales" class="value">0</div>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- ✅ Metadados (não fazem parte do formulário): linha no rodapé -->
+        <div class="view-meta">
+          <span><span class="lab">{{ _('Code') }}:</span> <span id="vBadgeCode">—</span></span>
+          <span><span class="lab">{{ _('Date/Time') }}:</span> <span id="vBadgeWhen">—</span></span>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+<script>
+  // ✅ Filho direto de <body>: garante position:fixed relativo à janela real,
+  // evitando popup deslocado/cortado quando a janela não está maximizada.
+  (function(){
+    try{
+      var el = document.getElementById('viewPicker');
+      if(el && el.parentNode !== document.body){ document.body.appendChild(el); }
+    }catch(e){}
+  })();
+</script>
+
+<!-- ===== Edit popup ===== -->
+<div id="editPicker" class="picker-backdrop" aria-hidden="true">
+  <section id="editSheet" class="picker-sheet edit-sheet" role="dialog" aria-modal="true" aria-labelledby="edit-title">
+    <header class="popup-header">
+      <h3 id="edit-title" class="popup-title">{{ _('Edit') }}</h3>
+      <button type="button" class="popup-close" aria-label="{{ _('Close') }}" onclick="{{ 'closeEditSale()' if mode == 'sales' else 'closeEditClient()' }}"></button>
+    </header>
+
+    <div class="picker-body scroll">
+      <div class="sheet-inner">
+        {% if mode == 'sales' %}
+        <form id="editSaleForm" onsubmit="event.preventDefault(); submitEditSale();">
+          <input type="hidden" id="sId">
+
+          <div class="grid">
+            <div class="field">
+              <div class="field-label-row">
+                <label for="sProduct">{{ _('Product') }}</label>
+              </div>
+              <input type="text" id="sProduct" placeholder="{{ _('Product') }}" autocomplete="off">
+            </div>
+
+            <div class="field">
+              <div class="field-label-row">
+                <label for="sAmount">{{ _('Amount') }}</label>
+              </div>
+              <div class="input-wrap">
+                <input type="text" id="sAmount" placeholder="0.00" inputmode="decimal" autocomplete="off">
+                <span id="sAmountOverlay" class="amount-overlay" aria-hidden="true">
+                  <span id="sOverlayFinal" class="amount-final"></span><span class="amount-space"> </span><span id="sOverlayOld" class="amount-old"></span>
+                </span>
+
+                <!-- ✅ ações de desconto no canto direito do próprio campo de Valor -->
+                <div class="client-actions">
+                  <button type="button" id="sBtnAddDisc" class="btn" hidden>{{ _('Discount') }}</button>
+                  <div id="sPairDiscCR" class="pair" hidden>
+                    <button type="button" id="sBtnChangeDisc" class="btn">{{ _('Change') }}</button>
+                    <button type="button" id="sBtnRemoveDisc" class="btn btn-danger">{{ _('Remove') }}</button>
+                  </div>
+                </div>
+              </div>
+              <input type="hidden" id="sFinal">
+            </div>
+
+            <div class="field" style="grid-column:1/-1">
+              <label for="sDesc">{{ _('Description') }}</label>
+              <textarea id="sDesc" rows="4" placeholder="{{ _('Description') }}"></textarea>
+            </div>
+          </div>
+        </form>
+
+        <!-- Popup: Discount (edit de venda) -->
+        <div id="sDiscPopup" class="picker-backdrop" aria-hidden="true">
+          <section id="sDiscSheet" class="picker-sheet" style="width:min(420px,92vw)" role="dialog" aria-modal="true" aria-labelledby="sdisc-title">
+            <header class="popup-header">
+              <h3 id="sdisc-title" class="popup-title">{{ _('Discount') }}</h3>
+              <button type="button" id="sDiscCloseBtn" class="popup-close" aria-label="{{ _('Close') }}"></button>
+            </header>
+            <div class="picker-body scroll" style="padding:16px">
+              <div class="field" style="margin:0">
+                <label for="sDiscInput">{{ _('Final Value') }}</label>
+                <input class="half" type="text" id="sDiscInput" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="0.00">
+              </div>
+            </div>
+            <div class="picker-actions">
+              <button type="button" id="sDiscOkBtn" class="primary icon-text" aria-label="{{ _('Change') }}" title="{{ _('Change') }}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M20 6 9 17l-5-5"></path>
+                </svg>
+                <span>{{ _('Change') }}</span>
+              </button>
+            </div>
+          </section>
+        </div>
+        {% else %}
+        <form id="editForm" onsubmit="event.preventDefault(); submitEdit();">
+          <input type="hidden" id="eCode">
+          <div class="grid">
+            <div class="field">
+              <label for="eName">{{ _('Name') }}</label>
+              <input type="text" id="eName" placeholder="{{ _('Name') }}" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="eAddress">{{ _('Address') }}</label>
+              <input type="text" id="eAddress" placeholder="{{ _('Address') }}" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="eContact">{{ _('Contact') }}</label>
+              <input type="text" id="eContact" placeholder="{{ _('Contact') }}" autocomplete="off">
+            </div>
+            <div class="field" style="grid-column:1/-1">
+              <label for="eDescription">{{ _('Description') }}</label>
+              <textarea id="eDescription" rows="4" placeholder="{{ _('Description') }}"></textarea>
+            </div>
+          </div>
+        </form>
+        {% endif %}
+        <!-- ✅ Código não aparece no Editar (nem Venda, nem Cliente): não é editável. -->
+      </div>
+    </div>
+
+    <div class="picker-actions plain-actions">
+      {% if mode == 'sales' %}
+      <button type="button" class="primary icon-text" onclick="submitEditSale()" aria-label="{{ _('Save') }}" title="{{ _('Save') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 6 9 17l-5-5"></path>
+        </svg>
+        <span>{{ _('Save') }}</span>
+      </button>
+      {% else %}
+      <button type="button" class="primary icon-text" onclick="submitEdit()" aria-label="{{ _('Save') }}" title="{{ _('Save') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 6 9 17l-5-5"></path>
+        </svg>
+        <span>{{ _('Save') }}</span>
+      </button>
+      {% endif %}
+    </div>
+  </section>
+</div>
+<script>
+  (function(){
+    try{
+      var el = document.getElementById('editPicker');
+      if(el && el.parentNode !== document.body){ document.body.appendChild(el); }
+    }catch(e){}
+    try{
+      // ✅ o popup de desconto fica dentro do .sheet-inner do editar no HTML,
+      // mas .picker-sheet tem transform (containing block p/ fixed) — precisa
+      // ser filho direto do <body> pra centralizar/posicionar na janela real.
+      var dp = document.getElementById('sDiscPopup');
+      if(dp && dp.parentNode !== document.body){ document.body.appendChild(dp); }
+    }catch(e){}
+  })();
+</script>
+
+<!-- ✅ Business/Settings implementados aqui direto (sem iframe): mesmo
+     documento da lista, então nenhum dos problemas de composição de iframe
+     (fundo preto, redimensionamento circular, recarregamento) pode
+     acontecer — são só popups escondidos por padrão, abertos pelo clique
+     nos itens da sidebar (ver base.html). Nova Venda continua como seção
+     de verdade (própria página, igual Vendas/Clientes), não como popup. -->
+{% include "businesspopup.html" %}
+{% include "settingspopup.html" %}
+
+<script>
+/* ===================== Subtotais + recenter on resize/sidebar (comum) ===================== */
+const cards = document.getElementById('cards');
+
+/* orVago(s) vem de app-common.js (evita duplicação) */
+
+/* ===== Voltar ao topo: aparece ao descer bastante a página ===== */
+(function(){
+  const btn = document.getElementById('btnScrollTop');
+  const scroller = document.getElementById('appScroller') || document.querySelector('.app');
+  if(!btn || !scroller) return;
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const THRESHOLD = 480;
+
+  const hintEls = ['editHint','printHint','csvHint','deleteHint']
+    .map(id=>document.getElementById(id)).filter(Boolean);
+
+  function anyHintOrBulkActive(){
+    if(document.body.classList.contains('bulk-on')) return true;
+    return hintEls.some(el => !el.hidden);
+  }
+
+  // ✅ centraliza sobre a LISTA (área de conteúdo), não sobre a janela toda —
+  // mesma lógica usada para centralizar os popups ao lado da sidebar.
+  function reposition(){
+    try{ btn.style.left = getContentCenterX() + 'px'; }catch(e){}
+  }
+
+  function sync(){
+    const show = scroller.scrollTop > THRESHOLD && !anyHintOrBulkActive();
+    btn.classList.toggle('show', show);
+    reposition();
+  }
+  scroller.addEventListener('scroll', sync, { passive:true });
+  window.addEventListener('resize', reposition);
+  reposition();
+  sync();
+
+  const mo = new MutationObserver(()=>{
+    sync();
+    // sidebar recolhe/expande com transição de largura: reposiciona de novo
+    // no fim da animação para acompanhar a nova largura da lista.
+    setTimeout(reposition, 260);
+  });
+  hintEls.forEach(el => mo.observe(el, { attributes:true, attributeFilter:['hidden'] }));
+  mo.observe(document.body, { attributes:true, attributeFilter:['class'] });
+
+  // ✅ painel de seleção em massa: mesma centralização sobre a lista
+  const bulkPanelEl = document.getElementById('bulkPanel');
+  if(bulkPanelEl){
+    const repositionBulk = ()=>{ try{ bulkPanelEl.style.left = getContentCenterX() + 'px'; }catch(e){} };
+    repositionBulk();
+    window.addEventListener('resize', repositionBulk);
+    const moBulk = new MutationObserver(()=>{ repositionBulk(); setTimeout(repositionBulk, 260); });
+    moBulk.observe(document.body, { attributes:true, attributeFilter:['class'] });
+  }
+
+  btn.addEventListener('click', ()=>{
+    scroller.scrollTo({ top:0, behavior: reduce ? 'auto' : 'smooth' });
+  });
+})();
+
+function recenterAllOpen(){
+  {% if mode == 'sales' %}
+  if(pickerIsOpen(printPicker)) recenterSheetSoon(printPreviewSheet);
+  if(typeof sDiscPopup !== 'undefined' && pickerIsOpen(sDiscPopup)) recenterSheetSoon(sDiscSheet);
+  {% endif %}
+  if(pickerIsOpen(viewPicker))  recenterSheetSoon(viewSheet);
+  if(pickerIsOpen(editPicker))  recenterSheetSoon(editSheet);
+}
+window.addEventListener('resize', ()=>{ recenterAllOpen(); {% if mode == 'sales' %}psbReflow();{% endif %} });
+
+const btnSide = document.getElementById('btnSidebarToggle');
+if(btnSide) btnSide.addEventListener('click', ()=> setTimeout(()=>{ recenterAllOpen(); {% if mode == 'sales' %}psbReflow();{% endif %} },0));
+const sideNav = document.getElementById('sideNav');
+if(sideNav) sideNav.addEventListener('transitionend', (ev)=>{
+  if(ev.propertyName==='width'){ recenterAllOpen(); {% if mode == 'sales' %}psbReflow();{% endif %} }
+});
+
+/* ===== View (detalhes) — popup ===== */
+const viewPicker = document.getElementById('viewPicker');
+const viewSheet  = document.getElementById('viewSheet');
+const vTitleName=document.getElementById('vTitleName');
+const vBadgeCode=document.getElementById('vBadgeCode');
+const vBadgeWhen=document.getElementById('vBadgeWhen');
+function closeView(){ closePicker(viewPicker); }
+viewPicker.addEventListener('click',(e)=>{ if(e.target===viewPicker) closeView(); });
+
+/* ===== Edit — popup (elementos comuns) ===== */
+const editPicker = document.getElementById('editPicker');
+const editSheet  = document.getElementById('editSheet');
+
+/* ========= EXCLUSIVIDADE DE MODOS (Bulk / Edit{{ ' / Print' if mode == 'sales' else '' }}) ========= */
+let bulkActive=false, editArmed=false, bulkAction=null;
+{% if mode == 'sales' %}let printArmed=false;{% endif %}
+let _lastToggledCode=null;
+
+const bulkPanel=document.getElementById('bulkPanel');
+const selCount=document.getElementById('selCount');
+const btnCancel=document.getElementById('btnBulkCancel');
+const btnConfirm=document.getElementById('btnBulkConfirm');
+const bulkAll=document.getElementById('bulkAll');
+const bulkAllWrap=document.getElementById('bulkAllWrap');
+
+{% if mode == 'sales' %}
+function setEditArmed(on, quiet){
+  const willOn=!!on;
+  if(willOn && !quiet){ setBulk(false,null,true); setPrintArmed(false,true); }
+  editArmed=willOn;
+}
+function setPrintArmed(on, quiet){
+  const willOn=!!on;
+  if(willOn && !quiet){ setBulk(false,null,true); setEditArmed(false,true); }
+  printArmed=willOn;
+}
+function setBulk(on, action, quiet){
+  const willOn=!!on;
+  _lastToggledCode=null;
+  if(willOn && !quiet){ setEditArmed(false,true); setPrintArmed(false,true); }
+  bulkActive=willOn;
+  document.body.classList.toggle('bulk-on',willOn);
+  if(willOn){
+    bulkAction=(action==='csv'?'csv': action==='delete'?'delete': bulkAction);
+    bulkAllWrap.classList.remove('hide');
+  }else{
+    cards.querySelectorAll('.card').forEach(c=> c.classList.remove('is-selected'));
+    cards.querySelectorAll('.row-check').forEach(c=>c.checked=false);
+    selCount.textContent='0'; btnConfirm.disabled=true; bulkAll.checked=false; bulkAction=null;
+  }
+}
+{% else %}
+function setEditArmed(on, quiet){
+  const willOn=!!on;
+  if(willOn && !quiet){ setBulk(false, null, true); }
+  editArmed=willOn;
+}
+function setBulk(on, action, quiet){
+  const willOn=!!on;
+  _lastToggledCode=null;
+  if(willOn && !quiet){ setEditArmed(false, true); }
+  bulkActive=willOn;
+  document.body.classList.toggle('bulk-on',willOn);
+  if(willOn){
+    bulkAction=(action==='csv'?'csv': action==='delete'?'delete': bulkAction);
+    bulkAllWrap.classList.remove('hide');
+  }else{
+    cards.querySelectorAll('.card').forEach(c=> c.classList.remove('is-selected'));
+    cards.querySelectorAll('.row-check').forEach(c=>c.checked=false);
+    selCount.textContent='0'; btnConfirm.disabled=true; bulkAll.checked=false; bulkAction=null;
+  }
+}
+{% endif %}
+btnCancel.addEventListener('click',()=> setBulk(false));
+
+/* Bulk seleção */
+{% if mode == 'sales' %}
+function updateSel(){
+  const all=[...document.querySelectorAll('#cards .row-check')].filter(cb=>{
+    const card = cb.closest('.card');
+    return card && card.hasAttribute('data-id') && !card.classList.contains('hidden');
+  });
+  const selected=all.filter(c=>c.checked);
+  all.forEach(cb=>{ cb.closest('.card')?.classList.toggle('is-selected',cb.checked); });
+  selCount.textContent=formatSelCount(selected.length);
+  btnConfirm.disabled=(selected.length===0);
+  bulkAll.checked=(selected.length>0 && selected.length===all.length);
+}
+{% else %}
+function updateSel(){
+  const all=[...document.querySelectorAll('#cards .row-check')].filter(cb=>!cb.closest('.card').classList.contains('hidden'));
+  const selected=all.filter(c=>c.checked);
+  all.forEach(cb=>{ cb.closest('.card')?.classList.toggle('is-selected',cb.checked); });
+  selCount.textContent=formatSelCount(selected.length);
+  btnConfirm.disabled=(selected.length===0);
+  bulkAll.checked=(selected.length>0 && selected.length===all.length);
+}
+{% endif %}
+cards.addEventListener('change',(e)=>{ if(e.target.matches('.row-check')) updateSel(); });
+bulkAll.addEventListener('change',()=>{
+  const on=bulkAll.checked;
+  {% if mode == 'sales' %}
+  document.querySelectorAll('#cards .row-check').forEach(c=>{
+    const card=c.closest('.card');
+    if(card && card.hasAttribute('data-id') && !card.classList.contains('hidden')) c.checked=on;
+  });
+  {% else %}
+  document.querySelectorAll('#cards .row-check').forEach(c=>{ const card=c.closest('.card'); if(!card.classList.contains('hidden')) c.checked=on; });
+  {% endif %}
+  updateSel();
+});
+
+btnConfirm.addEventListener('click', async ()=>{
+  {% if mode == 'sales' %}
+  const ids=[...document.querySelectorAll('#cards .row-check:checked')].map(c=>Number(c.value));
+  if(ids.length===0) return;
+
+  if(bulkAction==='delete'){
+    for(const id of ids){
+      try{ await fetch(`/sales/delete/${id}`,{method:'POST'});}catch(e){}
+      const __delEl=document.getElementById(`sale-${id}`);
+      if(__delEl){ if(window.animateRemove) window.animateRemove(__delEl); else __delEl.remove(); }
+    }
+    recalcSubtotals(); setBulk(false);
+  }else if(bulkAction==='csv'){
+    try{
+      const r=await fetch('/sales/export_csv',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ids})
+      });
+      const j=await r.json().catch(()=>null);
+      if(j && j.ok && j.download_url){
+        await __saveFromUrl(j.download_url, j.filename || 'sales.csv');
+      }
+    }catch(e){ console.error(e); }
+    setBulk(false);
+  }
+  {% else %}
+  const codes=[...document.querySelectorAll('#cards .row-check:checked')].map(c=>String(c.value));
+  if(codes.length===0) return;
+
+  if(bulkAction==='delete'){
+    try{
+      const r=await fetch('/api/clients/delete_sales',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({codes})
+      });
+      const j=await r.json();
+      if(j && j.ok){
+        for(const code of codes){
+          const __delEl=document.getElementById(`client-${code}`);
+          if(__delEl){ if(window.animateRemove) window.animateRemove(__delEl); else __delEl.remove(); }
+        }
+      }else{
+        alert(j && j.error ? j.error : '{{ _("Failed to delete.") }}');
+      }
+    }catch(e){
+      console.error(e);
+      alert('{{ _("Failed to delete.") }}');
+    }
+    setBulk(false);
+    recalcSubtotals();
+  }else if(bulkAction==='csv'){
+    try{
+      const r=await fetch('/clients/export_csv',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({codes})
+      });
+      const j=await r.json().catch(()=>null);
+
+      if(j && j.ok && j.download_url){
+        await __saveFromUrl(j.download_url, j.filename || 'clients.csv');
+      }else{
+        alert(j && (j.error||j.detail) ? String(j.error||j.detail) : '{{ _("Failed to generate spreadsheet.") }}');
+      }
+    }catch(e){
+      console.error(e);
+      alert('{{ _("Failed to generate spreadsheet.") }}');
+    }
+    setBulk(false);
+  }
+  {% endif %}
+});
+
+{% if mode == 'sales' %}
+/* ===== Helpers de dinheiro/subtotais (sales) ===== */
+let _emptyStateBusy = false;
+function ensureEmptyState(){
+  if(_emptyStateBusy) return;
+  _emptyStateBusy = true;
+  try{
+    const realCards = cards.querySelectorAll('.card[data-id]');
+    let empty = cards.querySelector('.card.empty-state');
+    if(realCards.length === 0){
+      if(!empty){
+        empty = document.createElement('div');
+        empty.className = 'card empty-state';
+        empty.innerHTML = '<div class="who">' + {{ _('No sales yet')|tojson }} + '</div>';
+        cards.appendChild(empty);
+      }
+    }else if(empty){
+      empty.remove();
+    }
+  }catch(e){}
+  _emptyStateBusy = false;
+}
+function recalcSubtotals(){
+  let g=0,f=0;
+  cards.querySelectorAll('.card[data-id]').forEach(c=>{
+    if(c.classList.contains('hidden')) return;
+    const v = toNumber(c.dataset.amount||0);
+    const ff = toNumber(c.dataset.final||v);
+    g+=v; f+=ff;
+  });
+  document.getElementById('subtotalGrossBox').textContent = toMoneyDisplay(g);
+  document.getElementById('subtotalFinalBox').textContent = toMoneyDisplay(f);
+  ensureEmptyState();
+}
+new MutationObserver(recalcSubtotals).observe(cards,{childList:true,subtree:false});
+
+/* Formatar valores dos cards ao carregar */
+(function formatCardValues(){
+  cards.querySelectorAll('.card[data-id]').forEach(c=>{
+    const v = toNumber(c.dataset.final || c.dataset.amount || 0);
+    const el = c.querySelector('.val');
+    if(el) el.textContent = toMoneyDisplay(v);
+  });
+})();
+
+const vName=document.getElementById('vName'),
+      vDesc=document.getElementById('vDesc'),
+      vAmount=document.getElementById('vAmount'),
+      vAmountOld=document.getElementById('vAmountOld');
+
+function openViewByCard(card){
+  if(!card) return;
+
+  const name = (card.dataset.name || '').trim() || '—';
+  const code = (card.dataset.code || '').trim() || '—';
+  const when = (card.dataset.created || '').trim() || '—';
+  const product = (card.dataset.product || '').trim() || '—';
+  const desc = orVago(card.dataset.desc);
+
+  vTitleName.textContent = product;
+  vBadgeCode.textContent = code;
+  vBadgeWhen.textContent = when;
+
+  vName.textContent    = name;
+  vDesc.textContent    = desc;
+
+  const original = toNumber(card.dataset.amount||0);
+  const final    = toNumber(card.dataset.final||card.dataset.amount||0);
+  vAmount.textContent = toMoneyDisplay(final);
+  vAmountOld.innerHTML = (original > 0 && Math.round(original*100) !== Math.round(final*100))
+    ? `(<s>${toMoneyDisplay(original)}</s>)`
+    : '';
+
+  openPicker(viewPicker, viewSheet);
+}
+
+const sId = document.getElementById('sId'),
+      sProduct=document.getElementById('sProduct'),
+      sAmount=document.getElementById('sAmount'),
+      sFinal=document.getElementById('sFinal'),
+      sDesc=document.getElementById('sDesc');
+
+/* ===== Ferramenta de desconto: mesmas peças/lógica de "Nova Venda"
+   (input-wrap com overlay do valor riscado, par Alterar/Remover), só que
+   em Editar o valor final já sempre existe — então começa mostrando
+   Alterar/Remover em vez do botão único "Discount". Clicar em Remover
+   volta ao botão único, exatamente como em Nova Venda. ===== */
+const sBtnAddDisc   = document.getElementById('sBtnAddDisc'),
+      sPairDiscCR   = document.getElementById('sPairDiscCR'),
+      sBtnChangeDisc= document.getElementById('sBtnChangeDisc'),
+      sBtnRemoveDisc= document.getElementById('sBtnRemoveDisc'),
+      sAmountWrap   = sAmount.closest('.input-wrap'),
+      sOverlayFinal = document.getElementById('sOverlayFinal'),
+      sOverlayOld   = document.getElementById('sOverlayOld'),
+      sDiscPopup    = document.getElementById('sDiscPopup'),
+      sDiscSheet    = document.getElementById('sDiscSheet'),
+      sDiscInput    = document.getElementById('sDiscInput'),
+      sDiscOkBtn    = document.getElementById('sDiscOkBtn'),
+      sDiscCloseBtn = document.getElementById('sDiscCloseBtn');
+
+enforceMoneyMask(sAmount);
+if(sDiscInput) enforceMoneyMask(sDiscInput);
+
+let sBaseAmountForDiscount = null;
+let sDiscResolve = null;
+let sDiscMaxAllowed = null;
+
+function sShowAmountOverlay(finalTxt, oldHtml){
+  if(!sAmountWrap) return;
+  sAmountWrap.classList.add('show-overlay');
+  sOverlayFinal.textContent = finalTxt || '';
+  sOverlayOld.innerHTML = oldHtml || '';
+}
+function sHideAmountOverlay(){
+  if(!sAmountWrap) return;
+  sAmountWrap.classList.remove('show-overlay');
+  sOverlayFinal.textContent = '';
+  sOverlayOld.innerHTML = '';
+}
+function sSetLocked(on){
+  if(on){
+    sAmount.setAttribute('readonly','readonly');
+    sAmount.setAttribute('aria-readonly','true');
+    sAmount.classList.add('locked');
+  }else{
+    sAmount.removeAttribute('readonly');
+    sAmount.removeAttribute('aria-readonly');
+    sAmount.classList.remove('locked');
+  }
+}
+// ✅ estado-alvo rastreado à parte do atributo `hidden` (mesma lógica de "Nova Venda"):
+// checar `.hidden` pra decidir se anima de novo é uma corrida contra a animação de
+// saída (que só marca `hidden=true` ao terminar), então o botão podia "sumir" de vez
+// se o usuário digitasse/apagasse/digitasse rápido demais.
+let sDiscMode = 'none'; // 'none' | 'add' | 'pair'
+function sSetDiscMode(mode){
+  if(mode === sDiscMode) return;
+  sDiscMode = mode;
+  if(mode === 'pair'){
+    if(sPairDiscCR){ sPairDiscCR.hidden = false; animateInSlime(sPairDiscCR); }
+    if(sBtnAddDisc) animateOutSlime(sBtnAddDisc);
+  }else if(mode === 'add'){
+    if(sBtnAddDisc){ sBtnAddDisc.hidden = false; animateInSlime(sBtnAddDisc); }
+    if(sPairDiscCR) animateOutSlime(sPairDiscCR);
+  }else{
+    if(sBtnAddDisc) animateOutSlime(sBtnAddDisc);
+    if(sPairDiscCR) animateOutSlime(sPairDiscCR);
+  }
+}
+function sUpdateAddDiscVisibility(){
+  if(sDiscMode === 'pair') return;
+  const amt = moneyMaskValue(sAmount);
+  const isLocked = sAmount.hasAttribute('readonly');
+  sSetDiscMode((amt > 0 && !isLocked) ? 'add' : 'none');
+}
+sAmount.addEventListener('input', ()=>{
+  if(!sAmount.hasAttribute('readonly')){
+    sBaseAmountForDiscount = null;
+    sHideAmountOverlay();
+  }
+  sUpdateAddDiscVisibility();
+});
+
+function openSDiscModal(initialValue, maxAllowed){
+  return new Promise((resolve)=>{
+    if(!sDiscPopup || !sDiscInput || !sDiscOkBtn || !sDiscCloseBtn){ resolve(null); return; }
+    sDiscResolve = resolve;
+    sDiscMaxAllowed = (typeof maxAllowed === 'number' && isFinite(maxAllowed)) ? maxAllowed : null;
+    setMoneyMaskValue(sDiscInput, 0);
+    openPicker(sDiscPopup, sDiscSheet, sDiscInput);
+  });
+}
+function closeSDiscModal(val=null){
+  if(!sDiscPopup) return;
+  closePicker(sDiscPopup);
+  if(typeof sDiscResolve === 'function'){
+    const r = sDiscResolve; sDiscResolve = null; r(val);
+  }
+}
+sDiscPopup?.addEventListener('click', (e)=>{ if(e.target===sDiscPopup) closeSDiscModal(null); });
+sDiscCloseBtn?.addEventListener('click', ()=> closeSDiscModal(null));
+sDiscInput?.addEventListener('keydown', (e)=>{
+  if(e.key==='Enter'){ e.preventDefault(); sDiscOkBtn?.click(); }
+  if(e.key==='Escape'){ e.preventDefault(); closeSDiscModal(null); }
+});
+sDiscOkBtn?.addEventListener('click', ()=>{
+  const finCents = moneyMaskCents(sDiscInput);
+  if(!(finCents > 0)){
+    flashInvalid(sDiscInput);
+    try{ sDiscInput.focus(); }catch(_){}
+    return;
+  }
+  const maxCents = Math.round((sDiscMaxAllowed || 0) * 100);
+  if(maxCents > 0 && finCents > maxCents){
+    renderMoneyMask(sDiscInput, 0);
+    sDiscInput.dispatchEvent(new Event('input', { bubbles:true }));
+    flashInvalid(sDiscInput);
+    try{ sDiscInput.focus(); }catch(_){}
+    return;
+  }
+  closeSDiscModal(String(finCents/100));
+});
+
+async function sOpenDisc(){
+  const base = (sBaseAmountForDiscount && sBaseAmountForDiscount > 0)
+    ? sBaseAmountForDiscount
+    : (moneyMaskValue(sAmount) || 0);
+  if(!(base > 0)){ flashInvalid(sAmount); return; }
+
+  const curFinal = toNumber(sFinal.value) || base;
+  const raw = await openSDiscModal(curFinal, base);
+  if(raw == null) return;
+
+  const fin = Number(raw) || 0;
+  const finCents = Math.round(fin*100);
+  const baseCents = Math.round(base*100);
+  if(!(fin > 0)) return;
+
+  if(finCents === baseCents){
+    sFinal.value = String(base);
+    sBaseAmountForDiscount = null;
+    setMoneyMaskValue(sAmount, base);
+    sSetLocked(false);
+    sHideAmountOverlay();
+    sSetDiscMode('add');
+    return;
+  }
+
+  sFinal.value = String(fin);
+  sBaseAmountForDiscount = base;
+  setMoneyMaskValue(sAmount, fin);
+  sSetLocked(true);
+  sShowAmountOverlay(toMoneyDisplay(fin), `(<s>${toMoneyDisplay(base)}</s>)`);
+  sSetDiscMode('pair');
+}
+
+function sRemoveDisc(){
+  const base = (sBaseAmountForDiscount && sBaseAmountForDiscount > 0) ? sBaseAmountForDiscount : (moneyMaskValue(sAmount) || 0);
+  setMoneyMaskValue(sAmount, base);
+  sFinal.value = String(base);
+  sBaseAmountForDiscount = null;
+  sSetLocked(false);
+  sHideAmountOverlay();
+  sSetDiscMode('add');
+}
+
+sBtnAddDisc?.addEventListener('click', (e)=>{ e.preventDefault(); sOpenDisc(); });
+sBtnChangeDisc?.addEventListener('click', (e)=>{ e.preventDefault(); sOpenDisc(); });
+sBtnRemoveDisc?.addEventListener('click', (e)=>{ e.preventDefault(); sRemoveDisc(); });
+
+function openEditSale(info){
+  sId.value = String(info.id||'');
+  sProduct.value = info.product||'';
+  sDesc.value = info.sale_description||'';
+
+  const amount = Number(info.amount) || 0;
+  const final  = Number(info.final_amount ?? info.amount) || 0;
+
+  sSetLocked(false);
+  sHideAmountOverlay();
+
+  if(final > 0 && Math.round(final*100) < Math.round(amount*100)){
+    setMoneyMaskValue(sAmount, final);
+    sFinal.value = String(final);
+    sBaseAmountForDiscount = amount;
+    sSetLocked(true);
+    sShowAmountOverlay(toMoneyDisplay(final), `(<s>${toMoneyDisplay(amount)}</s>)`);
+    // ✅ desconto já ativo (valor final < valor cheio): Alterar/Remover
+    sSetDiscMode('pair');
+  }else{
+    setMoneyMaskValue(sAmount, amount);
+    sFinal.value = String(amount);
+    sBaseAmountForDiscount = null;
+    // ✅ sem desconto (valor == valor final): botão único "Desconto"
+    sSetDiscMode(amount > 0 ? 'add' : 'none');
+  }
+
+  openPicker(editPicker, editSheet, sProduct);
+}
+function closeEditSale(){ closePicker(editPicker); closeSDiscModal(null); }
+editPicker.addEventListener('click',(e)=>{ if(e.target===editPicker) closeEditSale(); });
+
+/* ===== PRINT (popup) ===== */
+const printPicker=document.getElementById('printPicker'),
+      printPreviewSheet=document.getElementById('printPreviewSheet'),
+      printScroll=document.getElementById('printScroll'),
+      psbTrack=document.getElementById('psbTrack'),
+      psbThumb=document.getElementById('psbThumb'),
+      ticketImg=document.getElementById('ticketImg'),
+      ticketImgDrop=document.getElementById('ticketImgDrop'),
+      btnInsert=document.getElementById('btnInsert'),
+      btnClear=document.getElementById('btnClear'),
+      imgInput=document.getElementById('imgInput'),
+      imgDataUrlHidden=document.getElementById('imgDataUrlHidden'),
+      tClientCode=document.getElementById('tClientCode'),
+      tClientName=document.getElementById('tClientName'),
+      tProduct=document.getElementById('tProduct'),
+      tDescription=document.getElementById('tDescription'),
+      tPrice=document.getElementById('tPrice'),
+      tStoreName=document.getElementById('tStoreName'),
+      tStorePhone=document.getElementById('tStorePhone'),
+      tStoreAddr1=document.getElementById('tStoreAddr1'),
+      tStoreZIPTAX=document.getElementById('tStoreZIPTAX');
+
+const storeEditable=[tStoreName,tStorePhone,tStoreAddr1,tStoreZIPTAX];
+let currentPrintId=null;
+function __phNormalizedText(el){
+  return String(el.textContent || '')
+    .replace(/ /g, ' ')  // NBSP -> space
+    .replace(/​/g, ''); // zero-width
+}
+function __phIsEffectivelyEmpty(el){
+  const txt = __phNormalizedText(el);
+  if(txt.replace(/[\r\n]/g,'').length > 0) return false;
+
+  const html = String(el.innerHTML || '').toLowerCase().replace(/\s+/g,'');
+  return (html === '' || html === '<br>' || html === '<div><br></div>' || html === '<p><br></p>');
+}
+
+function updatePh(el){
+  const has = !__phIsEffectivelyEmpty(el);
+  if(has){ el.setAttribute('data-has','1'); }
+  else{ el.removeAttribute('data-has'); }
+}
+
+storeEditable.forEach((el)=>{
+  if(!el) return;
+  const onChange = ()=>{
+    if(__phIsEffectivelyEmpty(el)){
+      el.textContent = '';
+    }
+    updatePh(el);
+  };
+  el.addEventListener('input', onChange);
+  el.addEventListener('keyup', onChange);
+  el.addEventListener('blur', onChange);
+  el.addEventListener('paste', ()=> setTimeout(onChange, 0));
+  onChange();
+});
+
+function setTextAndPh(el,t){el.textContent=(t||'').trim();updatePh(el)}
+function toggleImgButtons(has){
+  btnInsert.style.display=has?'none':'inline-flex';
+  btnClear.style.display=has?'inline-flex':'none';
+  if(ticketImgDrop) ticketImgDrop.style.display=has?'none':'grid';
+}
+function setImgFromDataUrl(u){
+  if(u){
+    imgDataUrlHidden.value=u;
+  try{ const o=document.getElementById("imgDataUrlOrig"); if(o) o.value = (imgDataUrlHidden.value||"").trim(); }catch(_e){} ticketImg.src=u; ticketImg.style.display='block'; imgInput.value='';
+    toggleImgButtons(true);
+  } else{
+    imgDataUrlHidden.value=''; ticketImg.removeAttribute('src'); ticketImg.style.display='none';
+    toggleImgButtons(false);
+  }
+  requestAnimationFrame(()=>requestAnimationFrame(psbReflow));
+}
+function clearImg(){ setImgFromDataUrl(''); }
+imgInput.addEventListener('change',ev=>{
+  const f=ev.target.files?.[0]; if(!f) return;
+  const reader=new FileReader();
+  reader.onload=()=>{ const dataUrl=String(reader.result||''); if(dataUrl){ setImgFromDataUrl(dataUrl); } };
+  reader.readAsDataURL(f);
+});
+ticketImg?.addEventListener('load', ()=>{ requestAnimationFrame(psbReflow); });
+
+async function loadBusinessIntoPreview(){
+  try{
+    const r=await fetch('{{ url_for("api_business") }}'); const j=await r.json(); if(!(j&&j.ok&&j.data)) return;
+    const d=j.data||{};
+    setTextAndPh(tStoreName,d.name); setTextAndPh(tStorePhone,d.phone);
+    setTextAndPh(tStoreAddr1,d.addr1);
+    const tax=(d.taxid||d.tax_id||'').trim();
+    const cc=tax?('{{ _("TAX ID") }}'+': '+tax):'';
+    setTextAndPh(tStoreZIPTAX,cc);
+    const logo=(d.logo_dataurl||'').trim(); if(logo){setImgFromDataUrl(logo)} else {setImgFromDataUrl('')}
+  }catch(e){console.error(e)}
+}
+
+function openPrintByCard(card){
+  if(!card) return;
+  currentPrintId=Number(card.dataset.id||0);
+
+  storeEditable.forEach(el=>{el.textContent='';el.removeAttribute('data-has')});
+  const L={ CODE:"{{ _('CODE') }}", NAME:"{{ _('NAME') }}", PRODUCT:"{{ _('PRODUCT') }}", DESCRIPTION:"{{ _('DESCRIPTION') }}", PRICE:"{{ _('PRICE') }}" };
+  tClientCode.textContent=L.CODE+': '+(card.dataset.code||'—');
+  tClientName.textContent=L.NAME+': '+(card.dataset.name||'—');
+  tProduct.textContent   =L.PRODUCT+': '+(card.dataset.product||'—');
+  tDescription.textContent=L.DESCRIPTION+': '+(card.dataset.desc||'—');
+
+  const baseV = toNumber(card.dataset.amount || 0);
+  const finalV = toNumber(card.dataset.final || baseV);
+  if(baseV > 0 && Math.abs(finalV - baseV) > 0.000001){
+    tPrice.innerHTML = `${L.PRICE}: ${toMoneyDisplay(finalV)} (<s>${toMoneyDisplay(baseV)}</s>)`;
+  }else{
+    tPrice.textContent = L.PRICE+': '+toMoneyDisplay(finalV || baseV || 0);
+  }
+
+  setImgFromDataUrl(''); loadBusinessIntoPreview();
+
+  openPicker(printPicker, printPreviewSheet);
+  requestAnimationFrame(()=>{ psbReflow(); requestAnimationFrame(psbReflow); });
+}
+
+function closePrint(){ closePicker(printPicker); }
+printPicker.addEventListener('click',(e)=>{ if(e.target===printPicker) closePrint(); });
+
+/* ===== Scrollbar custom — PRINT ===== */
+const BTN_H = 12;
+const THUMB_MIN = 24;
+function usableTrack(){ return psbTrack.clientHeight - (BTN_H * 2); }
+function psbUpdate(){
+  const view  = printScroll.clientHeight;
+  const total = printScroll.scrollHeight;
+  const pos   = printScroll.scrollTop;
+
+  const trackH = usableTrack();
+  const ratio  = Math.min(1, view / Math.max(1,total));
+  const thumbH = Math.max(THUMB_MIN, Math.round(trackH * ratio));
+  const maxY   = Math.max(0, trackH - thumbH);
+  const y = (total <= view) ? 0 : Math.round((pos / (total - view)) * maxY);
+
+  psbThumb.style.height = `${thumbH}px`;
+  psbThumb.style.transform = `translateY(${y}px)`;
+  psbTrack.style.display = (total <= view + 1) ? 'none' : 'grid';
+}
+function psbScrollTo(y){ printScroll.scrollTo({ top:y, behavior:'auto' }); psbUpdate(); }
+psbTrack.addEventListener('mousedown', (e)=>{
+  if(e.target === psbThumb || e.target.id==='psbUp' || e.target.id==='psbDown') return;
+  printPreviewSheet.classList.add('psb-active');
+  const rect = psbTrack.getBoundingClientRect();
+  const clickY = Math.min(rect.height - BTN_H, Math.max(BTN_H, e.clientY - rect.top));
+  const offset = clickY - BTN_H;
+  const trackH = usableTrack();
+  const thumbH = psbThumb.offsetHeight;
+  const view  = printScroll.clientHeight;
+  const total = printScroll.scrollHeight;
+  const maxY  = Math.max(1, trackH - thumbH);
+  const targetRatio  = Math.min(1, Math.max(0, (offset - thumbH/2) / maxY));
+  const targetScroll = targetRatio * Math.max(0, total - view);
+  psbScrollTo(targetScroll);
+});
+let dragging=false, dragStartY=0, startScroll=0, maxScroll=0, maxY=0;
+psbThumb.addEventListener('mousedown', (e)=>{
+  e.preventDefault();
+  if(printScroll.scrollHeight <= printScroll.clientHeight) return;
+  dragging   = true;
+  dragStartY = e.clientY;
+  startScroll= printScroll.scrollTop;
+  const trackH = usableTrack();
+  const th     = psbThumb.offsetHeight;
+  maxY       = Math.max(1, trackH - th);
+  maxScroll  = Math.max(1, printScroll.scrollHeight - printScroll.clientHeight);
+  printPreviewSheet.classList.add('psb-dragging','psb-active');
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp, { once:true });
+});
+function onMove(e){
+  if(!dragging) return;
+  const dy = e.clientY - dragStartY;
+  const ratio = dy / maxY;
+  const target = Math.min(maxScroll, Math.max(0, startScroll + ratio * maxScroll));
+  printScroll.scrollTop = target;
+  psbUpdate();
+}
+function onUp(){
+  dragging=false;
+  printPreviewSheet.classList.remove('psb-dragging','psb-active');
+  window.removeEventListener('mousemove', onMove);
+}
+function step(dir){
+  const page = Math.max(40, Math.round(printScroll.clientHeight * 0.15));
+  psbScrollTo(printScroll.scrollTop + dir * page);
+}
+let holdTimer=null, rpt=null;
+function startHold(dir){
+  printPreviewSheet.classList.add('psb-active');
+  step(dir);
+  holdTimer=setTimeout(()=>{ rpt=setInterval(()=>step(dir),40); },350);
+}
+function stopHold(){
+  printPreviewSheet.classList.remove('psb-active');
+  clearTimeout(holdTimer); holdTimer=null;
+  clearInterval(rpt); rpt=null;
+}
+document.getElementById('psbUp').addEventListener('mousedown', ()=> startHold(-1));
+document.getElementById('psbDown').addEventListener('mousedown', ()=> startHold(+1));
+window.addEventListener('mouseup', stopHold);
+
+function psbReflow(){ try{ psbUpdate(); }catch(e){} }
+printScroll.addEventListener('scroll', psbUpdate, {passive:true});
+try{ new ResizeObserver(()=> psbReflow()).observe(printScroll); }catch(e){}
+
+/* Click nos cards */
+cards.addEventListener('mousedown',(e)=>{
+  if(bulkActive && e.shiftKey){ try{ e.preventDefault(); }catch(_){}}
+});
+cards.addEventListener('click',(e)=>{
+  const card=e.target.closest('.card'); if(!card || card.classList.contains('hidden')) return;
+  if(!card.hasAttribute('data-id')) return;
+
+  if(editArmed){
+    card.classList.add('tapped');
+    card.addEventListener('animationend', (ev)=>{ if(ev.animationName==='cardTap'){ card.classList.remove('tapped'); } }, {once:true});
+    setEditArmed(false,true);
+    try{ if(typeof window.__fabDeactivateActive==='function') window.__fabDeactivateActive(); }catch(e){}
+    openEditSale({
+      id:Number(card.dataset.id||0),
+      code: card.dataset.code||'',
+      name: card.dataset.name||'',
+      product: card.dataset.product||'',
+      amount: toNumber(card.dataset.amount||0),
+      final_amount: toNumber(card.dataset.final||card.dataset.amount||0),
+      sale_description: card.dataset.desc||'',
+      created: card.dataset.created||''
+    });
+    return;
+  }
+
+  if(printArmed){
+    card.classList.add('tapped');
+    card.addEventListener('animationend', (ev)=>{ if(ev.animationName==='cardTap'){ card.classList.remove('tapped'); } }, {once:true});
+    setPrintArmed(false,true);
+    try{ if(typeof window.__fabDeactivateActive==='function') window.__fabDeactivateActive(); }catch(e){}
+    openPrintByCard(card);
+    return;
+  }
+
+  if(bulkActive){
+    const cb=card.querySelector('.row-check'); if(!cb) return;
+
+    if(e.shiftKey){
+      const visible = [...cards.querySelectorAll('.card[data-id]')]
+        .filter(c=>!c.classList.contains('hidden'));
+      const ids = visible.map(c=>c.dataset.id);
+      let anchorId = _lastToggledCode;
+      if(anchorId == null && visible.length){ anchorId = visible[0].dataset.id; }
+      const from = ids.indexOf(String(anchorId));
+      const to   = ids.indexOf(String(card.dataset.id));
+      if(from !== -1 && to !== -1){
+        const targetState = !cb.checked;
+        const [a,b] = from < to ? [from,to] : [to,from];
+        for(let i=a;i<=b;i++){
+          const c = visible[i];
+          const box = c.querySelector('.row-check');
+          if(box){ box.checked = targetState; c.classList.toggle('is-selected', targetState); }
+        }
+        _lastToggledCode = card.dataset.id;
+        updateSel();
+        try{ window.getSelection().removeAllRanges(); }catch(_){}
+        return;
+      }
+    }
+
+    cb.checked=!cb.checked; card.classList.toggle('is-selected',cb.checked);
+    _lastToggledCode = card.dataset.id;
+    updateSel(); return;
+  }
+
+  card.classList.add('tapped');
+  card.addEventListener('animationend', (ev)=>{ if(ev.animationName==='cardTap'){ card.classList.remove('tapped'); } }, {once:true});
+  openViewByCard(card);
+});
+
+/* ====== BRIDGE p/ FAB do base.html/searchbar.html ====== */
+(function(){
+  function cancelAllModes(){
+    try{ setBulk(false,null,true); }catch(e){}
+    try{ setPrintArmed(false,true); }catch(e){}
+    try{ setEditArmed(false,true); }catch(e){}
+  }
+  function activateFromTop(action){
+    if(action==='edit')  { setEditArmed(true); return; }
+    if(action==='print') { setPrintArmed(true); return; }
+    if(action==='delete'){ setBulk(true,'delete'); return; }
+    if(action==='csv')   { setBulk(true,'csv'); return; }
+    cancelAllModes();
+  }
+
+  window.onFabActionDeactivate = function(action, ep){
+    if(ep!=='list_sales') return;
+    cancelAllModes();
+  };
+  window.onFabActionActivate = function(action, ep){
+    if(ep!=='list_sales') return;
+    activateFromTop(action);
+  };
+
+  window.onTopActionEdit  = function(ep){ if(ep==='list_sales') setEditArmed(true); };
+  window.onTopActionPrint = function(ep){ if(ep==='list_sales') setPrintArmed(true); };
+  window.onTopActionDelete= function(ep){ if(ep==='list_sales') setBulk(true,'delete'); };
+  window.onTopActionCsv   = function(ep){ if(ep==='list_sales') setBulk(true,'csv'); };
+
+  document.addEventListener('fab:deactivate', function(e){
+    const d=(e&&e.detail)||{};
+    if(d.ep!=='list_sales') return;
+    cancelAllModes();
+  });
+  document.addEventListener('fab:activate', function(e){
+    const d=(e&&e.detail)||{};
+    if(d.ep!=='list_sales') return;
+    activateFromTop(String(d.action||''));
+  });
+
+  document.addEventListener('keydown', function(e){
+    if(e.key!=='Escape') return;
+
+    if(pickerIsOpen(sDiscPopup)){
+      try{ e.stopPropagation(); }catch(_) {}
+      closeSDiscPopup();
+      return;
+    }
+
+    const anyMode = (editArmed || printArmed || bulkActive);
+    const anyPopup = (pickerIsOpen(printPicker) || pickerIsOpen(viewPicker) || pickerIsOpen(editPicker));
+
+    if(anyMode || anyPopup){
+      try{ e.stopPropagation(); }catch(_) {}
+      cancelAllModes();
+      try{ closePrint(); }catch(_) {}
+      try{ closeView(); }catch(_) {}
+      try{ closeEditSale(); }catch(_) {}
+    }
+  }, {capture:true});
+})();
+
+/* ===== Edit submit ===== */
+async function submitEditSale(){
+  const id = Number(sId.value||0); if(!id) return;
+  // ✅ com desconto ativo, sAmount mostra o valor FINAL (travado) — o valor
+  // original fica em sBaseAmountForDiscount, não no campo visível.
+  const amountVal = (sBaseAmountForDiscount && sBaseAmountForDiscount > 0)
+    ? String(sBaseAmountForDiscount)
+    : String(moneyMaskValue(sAmount) || 0);
+  const payload = {
+    product: (sProduct.value||'').trim(),
+    amount:  amountVal,
+    final_amount: (sFinal.value||'').trim(),
+    sale_description: (sDesc.value||'').trim()
+  };
+  try{
+    const r = await fetch(`/sales/update/${id}`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const j = await r.json().catch(()=>({}));
+    if(j && j.ok && j.sale){
+      const card = document.getElementById(`sale-${id}`);
+      if(card){
+        card.dataset.product = j.sale.product || '';
+        card.dataset.desc    = j.sale.sale_description || '';
+        card.dataset.amount  = j.sale.amount ?? 0;
+        card.dataset.final   = j.sale.final_amount ?? j.sale.amount ?? 0;
+
+        const descEl = card.querySelector('.desc');
+        const valEl  = card.querySelector('.val');
+        if(descEl) descEl.textContent = `${j.sale.product||''} — ${orVago(j.sale.sale_description)}`;
+        if(valEl)  valEl.textContent  = toMoneyDisplay(j.sale.final_amount ?? j.sale.amount ?? 0);
+      }
+      recalcSubtotals(); closeEditSale();
+    }else{
+      alert(j && j.error ? j.error : '{{ _("Failed to save.") }}');
+    }
+  }catch(e){ console.error(e); alert('{{ _("Failed to save.") }}'); }
+}
+
+/* ===== Gerar PDF ===== */
+async function submitPdf(){
+  const id = currentPrintId; if(!id) return;
+  const f = new FormData();
+
+  const imgU = (document.getElementById('imgDataUrlHidden')?.value || '').trim();
+  if(imgU) f.append('img_dataurl', imgU);
+
+  const getTxt = id => (document.getElementById(id)?.textContent || '').trim();
+  f.append('store_name',  getTxt('tStoreName'));
+  f.append('store_phone', getTxt('tStorePhone'));
+  f.append('store_addr1', getTxt('tStoreAddr1'));
+  f.append('store_ziptax',getTxt('tStoreZIPTAX'));
+
+  try{
+    const r = await fetch(`/receipt/${id}`, { method:'POST', body:f });
+    const d = await r.json().catch(()=>({}));
+    if(!(d && d.ok && d.download_url && d.filename)){
+      alert('{{ _("Could not generate the PDF.") }}'); return;
+    }
+    const api = __desktopApi();
+    if(api && api.choose_save_path){
+      const p=await api.choose_save_path(d.filename); if(!p) return;
+      const rr=await api.download_pdf_to(d.download_url,p);
+      if(rr&&rr.ok){ await api.open_file(p); } else { alert('{{ _("Failed to save the PDF.") }}'); }
+    }else{
+      window.location.href = d.download_url;
+    }
+  }catch(e){
+    console.error(e); alert('{{ _("Failed to generate the PDF.") }}');
+  }
+}
+
+/* Recalcular totais na carga */
+recalcSubtotals();
+
+{% else %}
+/* ===== Subtotais (clients) ===== */
+function recalcSubtotals(){
+  let clientsCount = 0;
+  let salesSum = 0;
+
+  document.querySelectorAll('#cards .card[data-code]').forEach(card=>{
+    if(card.classList.contains('hidden')) return;
+    clientsCount++;
+    salesSum += +(card.dataset.sales||0);
+  });
+
+  const cBox = document.getElementById('subtotalClientsBox');
+  const sBox = document.getElementById('subtotalSalesBox');
+  if(cBox) cBox.textContent = String(clientsCount);
+  if(sBox) sBox.textContent = String(salesSum);
+  ensureEmptyState();
+}
+let _emptyStateBusy = false;
+function ensureEmptyState(){
+  if(_emptyStateBusy) return;
+  _emptyStateBusy = true;
+  try{
+    const realCards = document.querySelectorAll('#cards .card[data-code]');
+    let empty = cards.querySelector('.card.empty-state');
+    if(realCards.length === 0){
+      if(!empty){
+        empty = document.createElement('div');
+        empty.className = 'card empty-state';
+        empty.innerHTML = '<div class="who">' + {{ _('No clients yet')|tojson }} + '</div>';
+        cards.appendChild(empty);
+      }
+    }else if(empty){
+      empty.remove();
+    }
+  }catch(e){}
+  _emptyStateBusy = false;
+}
+new MutationObserver(recalcSubtotals).observe(cards,{childList:true,subtree:false});
+
+const vAddr=document.getElementById('vAddr'),
+      vContact=document.getElementById('vContact'),
+      vDesc=document.getElementById('vDesc'),
+      vSales=document.getElementById('vSales');
+
+function openViewByCard(card){
+  if(!card) return;
+
+  const name = (card.dataset.name || '').trim() || '—';
+  const code = (card.dataset.code || '').trim() || '—';
+  const when = (card.dataset.created || '').trim() || '—';
+  const addr = orVago(card.dataset.address);
+  const contact = orVago(card.dataset.contact);
+  const desc = orVago(card.dataset.desc);
+  const sales = String(card.dataset.sales || 0);
+
+  vTitleName.textContent = name;
+  vBadgeCode.textContent = code;
+  vBadgeWhen.textContent = when;
+
+  vAddr.textContent    = addr;
+  vContact.textContent = contact;
+  vDesc.textContent    = desc;
+  vSales.textContent   = sales;
+
+  openPicker(viewPicker, viewSheet);
+}
+
+const eCode=document.getElementById('eCode'),
+      eName=document.getElementById('eName'),
+      eAddress=document.getElementById('eAddress'),
+      eContact=document.getElementById('eContact'),
+      eDescription=document.getElementById('eDescription');
+
+function openEditClient(info){
+  eCode.value = info.code || '';
+  eName.value = info.name || '';
+  eAddress.value = info.address || '';
+  eContact.value = info.contact || '';
+  eDescription.value = info.desc || '';
+
+  openPicker(editPicker, editSheet, eName);
+}
+function closeEditClient(){ closePicker(editPicker); }
+editPicker.addEventListener('click',(e)=>{ if(e.target===editPicker) closeEditClient(); });
+
+async function submitEdit(){
+  const code = (eCode.value||'').trim();
+  if(!code){ closeEditClient(); return; }
+
+  const payload = {
+    name: (eName.value||'').trim(),
+    address: (eAddress.value||'').trim(),
+    contact: (eContact.value||'').trim(),
+    client_description: (eDescription.value||'').trim(),
+  };
+
+  try{
+    const r=await fetch(`/clients/update/${code}`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)
+    });
+    const j=await r.json().catch(()=>({}));
+    if(j && j.ok && j.client){
+      const c=document.getElementById(`client-${code}`);
+      if(c){
+        c.dataset.name    = j.client.name||'';
+        c.dataset.address = j.client.address||'';
+        c.dataset.contact = j.client.contact||'';
+        c.dataset.desc    = j.client.client_description||'';
+
+        const who = c.querySelector('.who');
+        const desc = c.querySelector('.desc');
+        if(who)  who.textContent = j.client.name||'';
+        if(desc) desc.textContent = `${orVago(j.client.address)} — ${orVago(j.client.contact)} — ${orVago(j.client.client_description)}`;
+      }
+      closeEditClient();
+      recalcSubtotals();
+    }else{
+      alert(j && j.error ? j.error : '{{ _("Failed to save.") }}');
+    }
+  }catch(e){
+    console.error(e);
+    alert('{{ _("Failed to save.") }}');
+  }
+}
+
+/* Click cards */
+cards.addEventListener('mousedown',(e)=>{
+  if(bulkActive && e.shiftKey){ try{ e.preventDefault(); }catch(_){}}
+});
+cards.addEventListener('click',(e)=>{
+  const card=e.target.closest('.card'); if(!card || card.classList.contains('hidden')) return;
+  if(!card.hasAttribute('data-code')) return;
+
+  if(editArmed){
+    card.classList.add('tapped');
+    card.addEventListener('animationend', (ev)=>{ if(ev.animationName==='cardTap'){ card.classList.remove('tapped'); } }, {once:true});
+    setEditArmed(false,true);
+    try{ if(typeof window.__fabDeactivateActive==='function') window.__fabDeactivateActive(); }catch(e){}
+    openEditClient({
+      code:card.dataset.code||'',
+      name:card.dataset.name||'',
+      address:card.dataset.address||'',
+      contact:card.dataset.contact||'',
+      desc:card.dataset.desc||''
+    });
+    return;
+  }
+
+  if(bulkActive){
+    const cb=card.querySelector('.row-check'); if(!cb) return;
+
+    if(e.shiftKey){
+      const visible = [...document.querySelectorAll('#cards .card[data-code]')]
+        .filter(c=>!c.classList.contains('hidden'));
+      const codes = visible.map(c=>c.dataset.code);
+      let anchorCode = _lastToggledCode;
+      if(anchorCode == null && visible.length){ anchorCode = visible[0].dataset.code; }
+      const from = codes.indexOf(String(anchorCode));
+      const to   = codes.indexOf(String(card.dataset.code));
+      if(from !== -1 && to !== -1){
+        const targetState = !cb.checked;
+        const [a,b] = from < to ? [from,to] : [to,from];
+        for(let i=a;i<=b;i++){
+          const c = visible[i];
+          const box = c.querySelector('.row-check');
+          if(box){ box.checked = targetState; c.classList.toggle('is-selected', targetState); }
+        }
+        _lastToggledCode = card.dataset.code;
+        updateSel();
+        try{ window.getSelection().removeAllRanges(); }catch(_){}
+        return;
+      }
+    }
+
+    cb.checked=!cb.checked; card.classList.toggle('is-selected',cb.checked);
+    _lastToggledCode = card.dataset.code;
+    updateSel(); return;
+  }
+
+  card.classList.add('tapped');
+  card.addEventListener('animationend', (ev)=>{ if(ev.animationName==='cardTap'){ card.classList.remove('tapped'); } }, {once:true});
+  openViewByCard(card);
+});
+
+/* ====== BRIDGE p/ FAB do base.html/searchbar.html ====== */
+(function(){
+  function cancelAllModes(){
+    try{ setEditArmed(false,true); }catch(e){}
+    try{ setBulk(false,null,true); }catch(e){}
+  }
+  function closeAllPopups(){
+    try{ if(pickerIsOpen(viewPicker)) closeView(); }catch(e){}
+    try{ if(pickerIsOpen(editPicker)) closeEditClient(); }catch(e){}
+  }
+  function activateFromTop(action){
+    if(action==='edit')   { setEditArmed(true); return; }
+    if(action==='delete') { setBulk(true,'delete'); return; }
+    if(action==='csv')    { setBulk(true,'csv'); return; }
+    cancelAllModes();
+  }
+
+  window.onFabActionDeactivate = function(action, ep){
+    if(ep!=='list_clients') return;
+    cancelAllModes();
+  };
+  window.onFabActionActivate = function(action, ep){
+    if(ep!=='list_clients') return;
+    activateFromTop(action);
+  };
+
+  window.onTopActionEdit = function(ep){ if(ep==='list_clients') setEditArmed(true); };
+  window.onTopActionDelete = function(ep){ if(ep==='list_clients') setBulk(true,'delete'); };
+  window.onTopActionCsv = function(ep){ if(ep==='list_clients') setBulk(true,'csv'); };
+
+  document.addEventListener('fab:deactivate', function(e){
+    const d=(e&&e.detail)||{};
+    if(d.ep!=='list_clients') return;
+    cancelAllModes();
+  });
+  document.addEventListener('fab:activate', function(e){
+    const d=(e&&e.detail)||{};
+    if(d.ep!=='list_clients') return;
+    activateFromTop(String(d.action||''));
+  });
+
+  document.addEventListener('keydown', function(e){
+    if(e.key!=='Escape') return;
+
+    const anyMode = (editArmed || bulkActive);
+    const anyPopup = (pickerIsOpen(viewPicker) || pickerIsOpen(editPicker));
+
+    if(anyMode || anyPopup){
+      try{ e.stopPropagation(); }catch(_) {}
+      cancelAllModes();
+      closeAllPopups();
+    }
+  }, {capture:true});
+})();
+
+/* Inicializa subtotais na carga */
+recalcSubtotals();
+{% endif %}
+</script>
+{% endif %}
+{% endblock %}

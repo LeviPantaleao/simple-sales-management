@@ -1,0 +1,745 @@
+<style>
+/* .sidebar/.app: removido código morto (mesma razão de business.html) */
+
+/* ===== Backdrop: fade in / fade out (suave) ===== */
+@keyframes backdropFadeIn{from{opacity:0}to{opacity:1}}
+@keyframes backdropFadeOut{from{opacity:1}to{opacity:0}}
+
+/* (Opcional) Sheet: só um fade no fechamento, sem “subir/descer” */
+@keyframes sheetFadeOut{from{opacity:1}to{opacity:0}}
+
+/* ===== .popup-backdrop / .popup-sheet (caixa, posição, cor, z-index)
+   vêm de base.html. Aqui só o padding do backdrop, a max-height do
+   sheet e a animação de entrada/saída deste popup. ===== */
+.popup-backdrop{
+  padding:24px;
+  opacity:0;
+  animation:backdropFadeIn 140ms cubic-bezier(.22,.61,.36,1) both;
+  will-change:opacity;
+}
+.popup-backdrop.is-closing{
+  animation:backdropFadeOut 140ms cubic-bezier(.22,.61,.36,1) both;
+  pointer-events:none;
+}
+.popup-sheet{ max-height:92vh; }
+.popup-backdrop.is-closing .popup-sheet{
+  animation:sheetFadeOut 140ms cubic-bezier(.22,.61,.36,1) both;
+  will-change:opacity;
+}
+
+@media (prefers-reduced-motion: reduce){
+  .popup-backdrop,.popup-backdrop.is-closing,.popup-backdrop.is-closing .popup-sheet{animation:none!important}
+}
+
+/* .popup-header/.popup-title vêm de base.html (evita duplicação) */
+/* .popup-close vem de base.html (evita duplicação) */
+.popup-body{padding:16px;overflow:auto;overscroll-behavior:contain;max-height:calc(92vh - 56px)}
+/* .group/.grid/.field/label/input[type=text]/.secondary vêm de base.html (evita duplicação) */
+#saveHint{font-size:.86rem;color:var(--muted);margin-top:8px;min-height:1.2em}
+
+/* ===== Data tools ===== */
+.data-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.danger{
+  background:rgba(185,28,28,.14);
+  color:#ef4444;
+  border:1px solid rgba(239,68,68,.35);
+  border-radius:8px;
+  padding:10px 14px;
+  font-weight:800;
+  cursor:pointer;
+}
+.danger:hover{filter:brightness(1.06)}
+
+/* =========================================================
+   ✅ CONFIRM "Redefinir" — sem componente próprio: reaproveita os
+   primitivos .popup-* usados por TODOS os popups do programa
+   (.popup-backdrop / .popup-sheet / .popup-header / .popup-body /
+   .actions). Só dois ajustes: ficar acima do popup de Configurações
+   (popup dentro de popup) e um pouco mais estreito, por ser um
+   diálogo de uma frase.
+   ========================================================= */
+#resetConfirm{ z-index:5100; }
+#resetConfirm .popup-sheet{ width:min(460px,92vw); }
+#resetConfirm .popup-body p{ margin:0; color:var(--muted); line-height:1.4; }
+</style>
+
+<div class="popup-backdrop" id="stBackdrop">
+  <section class="popup-sheet" id="stSheet">
+    <header class="popup-header">
+      <h2 class="popup-title">{{ _('Settings') }}</h2>
+      <button type="button" class="popup-close" aria-label="{{ _('Close') }}" onclick="closePopup()"></button>
+    </header>
+
+    <div class="popup-body" id="stBody">
+      <form id="settingsForm" method="post" action="{{ url_for('save_settings') }}" autocomplete="off">
+        <!-- Aparência -->
+        <section class="group">
+          <div class="legend">{{ _('Appearance') }}</div>
+          <div class="grid">
+            <div class="field">
+              <label for="preferred_locale">{{ _('Language') }}</label>
+              {% set __pl = (SETTINGS.preferred_locale if SETTINGS is defined else '') %}
+              {% if (not __pl) or (__pl == 'auto') %}
+                {% set __tag = ((current_lang_tag() if current_lang_tag is defined else 'en')|lower) %}
+                {% if __tag.startswith('pt') %}{% set __pl = 'pt_BR' %}
+                {% elif __tag.startswith('es') %}{% set __pl = 'es' %}
+                {% else %}{% set __pl = 'en' %}{% endif %}
+              {% endif %}
+              <select id="preferred_locale" name="preferred_locale">
+                <option value="en" {% if __pl=='en' %}selected{% endif %}>English</option>
+                <option value="pt_BR" {% if __pl=='pt_BR' %}selected{% endif %}>Português (Brasil)</option>
+                <option value="es" {% if __pl=='es' %}selected{% endif %}>Español</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="theme_mode">{{ _('Theme') }}</label>
+              {% set __tm = (SETTINGS.theme_mode if SETTINGS is defined else '') %}
+              <select id="theme_mode" name="theme_mode" data-stored="{{ __tm|e }}">
+                {% for val, label in THEME_CHOICES if val != 'auto' %}
+                  <option value="{{ val }}" {% if (__tm == val) %}selected{% endif %}>{{ _(label) }}</option>
+                {% endfor %}
+              </select>
+              <script>
+                // If stored theme is 'auto', pick OS preference for display (no auto option).
+                (function(){
+                  try{
+                    var sel = document.getElementById('theme_mode');
+                    if(!sel) return;
+                    var stored = (sel.getAttribute('data-stored') || '').toLowerCase();
+                    if(stored === 'auto' || !stored){
+                      var prefersDark = false;
+                      try{ prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; }catch(e){}
+                      sel.value = prefersDark ? 'dark' : 'light';
+                    }
+                  }catch(e){}
+                })();
+              </script>
+            </div>
+          </div>
+        </section>
+
+        <!-- Diretórios -->
+        <section class="group">
+          <div class="legend">{{ _('Directories') }}</div>
+
+          <div class="field" style="grid-column:1/-1">
+            <label for="data_dir">{{ _('Data directory') }}</label>
+            <div class="grid" style="grid-template-columns:1fr auto auto;gap:8px">
+              <input type="text" id="data_dir" name="data_dir" value="{{ SETTINGS.data_dir }}" readonly>
+              <button type="button" class="secondary" data-nosave-on-blur onclick="openDir('data_dir')">{{ _('Open') }}</button>
+              <button type="button" class="secondary" onclick="chooseDir('data_dir')">{{ _('Choose…') }}</button>
+            </div>
+          </div>
+
+          <div class="field" style="grid-column:1/-1">
+            <label for="explorer_dir">{{ _('Explorer directory') }}</label>
+            <div class="grid" style="grid-template-columns:1fr auto auto;gap:8px">
+              <input type="text" id="explorer_dir" name="explorer_dir" value="{{ SETTINGS.explorer_dir }}" readonly>
+              <button type="button" class="secondary" data-nosave-on-blur onclick="openDir('explorer_dir')">{{ _('Open') }}</button>
+              <button type="button" class="secondary" onclick="chooseDir('explorer_dir')">{{ _('Choose…') }}</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Dados (Export/Import/Reset) -->
+        <section class="group">
+          <div class="legend">{{ _('Data') }}</div>
+
+          <div class="data-row" style="margin-bottom:10px">
+            <button type="button" class="secondary" data-nosave-on-blur onclick="exportData()">
+              {{ _('Export') }}
+            </button>
+
+            <button type="button" class="secondary" data-nosave-on-blur onclick="triggerImport()">
+              {{ _('Import') }}
+            </button>
+
+            <!-- ✅ agora abre confirmação HTML (sem confirm() nativo) -->
+            <button type="button" class="danger" data-nosave-on-blur onclick="openResetConfirm()">
+              {{ _('Reset') }}
+            </button>
+
+            <input id="importFile" type="file" accept=".json,application/json" hidden>
+          </div>
+        </section>
+
+        <div id="saveHint" aria-live="polite"></div>
+      </form>
+    </div>
+  </section>
+</div>
+
+<!-- =========================================================
+     ✅ Confirmação de "Redefinir" — mesmos primitivos de popup do
+     resto do programa (ver override #resetConfirm no <style>).
+     ========================================================= -->
+<div class="popup-backdrop" id="resetConfirm" hidden>
+  <section class="popup-sheet" role="dialog" aria-modal="true" aria-labelledby="resetTitle" aria-describedby="resetDesc">
+    <header class="popup-header">
+      <h2 class="popup-title" id="resetTitle">{{ _('Reset all data') }}</h2>
+    </header>
+
+    <div class="popup-body">
+      <p id="resetDesc">{{ _('Deletes all sales, clients and business data and restarts the initial setup. This cannot be undone.') }}</p>
+
+      <div class="actions">
+        <button type="button" class="secondary" data-nosave-on-blur onclick="closeResetConfirm()">{{ _('Cancel') }}</button>
+        <button type="button" class="danger" data-nosave-on-blur id="resetConfirmGo" onclick="resetAllDataConfirmed()">{{ _('Confirm') }}</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+function $(id){return document.getElementById(id)}
+function setHint(msg){
+  const el=$('saveHint'); if(!el) return;
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(reduce){ el.textContent = msg||''; return; }
+  if(!msg){
+    el.style.transition = 'opacity .2s ease';
+    el.style.opacity = '0';
+    setTimeout(()=>{ if(el.style.opacity==='0') el.textContent=''; }, 200);
+    return;
+  }
+  el.style.transition = 'none';
+  el.style.opacity = '0';
+  el.textContent = msg;
+  void el.offsetWidth;
+  el.style.transition = 'opacity .2s ease';
+  el.style.opacity = '1';
+}
+function val(id){return ($(id)?.value||'').trim()}
+
+function __normSlashes(p){
+  try{
+    let s = String(p || '');
+    if(!s) return '';
+    s = s.replace(/\\/g,'/').replace(/\/+/g,'/');
+    if(s.startsWith('//')) s = '//' + s.slice(2).replace(/\/+/g,'/').replace(/\/+$/,'');
+    else s = s.replace(/\/+$/,'');
+    return s;
+  }catch(e){ return String(p || ''); }
+}
+function __withSSMDataSuffix(p){
+  const s = __normSlashes(p);
+  if(!s) return '';
+  const suffix = '/SimpleSalesManagement/data';
+  return s.toLowerCase().endsWith(suffix.toLowerCase()) ? s : (s + suffix);
+}
+function __normalizeDirField(id){
+  try{
+    const el = $(id);
+    if(!el) return;
+    if(id === 'data_dir') el.value = __withSSMDataSuffix(el.value);
+    else el.value = __normSlashes(el.value);
+  }catch(_e){}
+}
+
+
+/* ===== Integração Desktop: __desktopApi() vem de app-common.js (evita duplicação) ===== */
+
+/* aplica tema no Electron (main process) + (opcional) no front, sem depender só de reload */
+async function __applyThemeDesktop(mode){
+  try{
+    const api = __desktopApi();
+    if(api && typeof api.apply_theme_mode === 'function'){
+      await api.apply_theme_mode(mode, null);
+      return true;
+    }
+  }catch(e){ console.error(e); }
+  return false;
+}
+
+/* aplica idioma no Electron (título + rota /i18n/set) sem precisar reload “cego” */
+async function __applyLangDesktop(tag){
+  try{
+    const api = __desktopApi();
+    if(api && typeof api.apply_language === 'function'){
+      await api.apply_language(tag);
+      return true;
+    }
+  }catch(e){ console.error(e); }
+  return false;
+}
+
+
+/* aplica diretório padrão do Explorer no Electron (diálogo de salvar/baixar) */
+async function __applyExplorerDirDesktop(dir){
+  try{
+    const api = __desktopApi();
+    if(api && typeof api.set_explorer_dir === 'function'){
+      await api.set_explorer_dir(dir);
+      return true;
+    }
+  }catch(e){ console.error(e); }
+  return false;
+}
+
+/* ===== Captura / persiste URL de retorno (sales / clients / sale) ===== */
+(function(){
+  try{
+    const KEY='stReturnUrl';
+    const here = location.pathname + location.search + location.hash;
+
+    function setIfValid(u){
+      if(!u) return;
+      if(u === here) return;
+      try{ sessionStorage.setItem(KEY, u); }catch(_){}
+    }
+
+    // 1) Permite passar ?next=/sale (opcional)
+    try{
+      const qs = new URLSearchParams(location.search);
+      const next = qs.get('next');
+      if(next){
+        const nu = new URL(next, location.origin);
+        if(nu.origin === location.origin) setIfValid(nu.pathname + nu.search + nu.hash);
+        return;
+      }
+    }catch(_){}
+
+    // 2) Usa referrer (mesma origem) e aceita sale / sales / clients
+    const ref = document.referrer;
+    if(ref){
+      const ru = new URL(ref);
+      if(ru.origin === location.origin){
+        const p = (ru.pathname || '');
+        if (/(^|\/)(sale|sales|clients)(\/|$)/i.test(p)){
+          setIfValid(ru.pathname + ru.search + ru.hash);
+        }
+      }
+    }
+  }catch(_){}
+})();
+
+function __getReturnUrl(){
+  try{
+    const v = sessionStorage.getItem('stReturnUrl');
+    if(v) return v;
+  }catch(_){}
+  return '{{ url_for("list_sales") }}';
+}
+
+/* Mostrar 'Saved' pós-reload (fallback quando precisar reload) */
+(function(){
+  try{
+    if(sessionStorage.getItem('showSavedHint')==='1'){
+      sessionStorage.removeItem('showSavedHint');
+      setHint('{{ _("Saved") }}');
+      setTimeout(()=>setHint(''),1600);
+    }
+  }catch(_){}
+})();
+
+/* ===== Guard para evitar auto-save no blur vindo dos botões marcados
+   com [data-nosave-on-blur] (Abrir no Explorer, Escolher…, Fechar…) ===== */
+window.__suppressNextBlurSave = false;
+document.addEventListener('pointerdown', function(e){
+  if (e.target && e.target.closest && e.target.closest('[data-nosave-on-blur]')) {
+    window.__suppressNextBlurSave = true;
+    setTimeout(()=>{ window.__suppressNextBlurSave = false; }, 500);
+  }
+});
+
+/* ===== Auto-save ===== */
+(function(){
+  const form = $('settingsForm'); if(!form) return;
+  let saveTimer=null, inflight=null;
+
+  async function submitForm(reason){
+    if(!form || !form.action) return;
+    if(inflight){ try{ await inflight; }catch(_){ } }
+
+    setHint('{{ _("Saving…") }}');
+    __normalizeDirField('data_dir');
+    __normalizeDirField('explorer_dir');
+    const fd = new FormData(form);
+
+    inflight = fetch(form.action,{method:'POST',body:fd,credentials:'same-origin'})
+      .then(async ()=>{
+        // Tema: tenta aplicar no Desktop, e só recarrega se a API não existir
+        if(reason === 'theme'){
+          const mode = (val('theme_mode') || 'dark').toLowerCase();
+          const ok = await __applyThemeDesktop(mode);
+          setHint('{{ _("Saved") }}');
+
+          if(!ok){
+            try{ sessionStorage.setItem('showSavedHint','1'); }catch(_){}
+            location.reload();
+            return;
+          }
+          return;
+        }
+
+        // Idioma: igual ao tema — não recria nem navega a janela. Ajusta o
+        // cookie `lang` (tem prioridade no servidor, ver _select_locale),
+        // sincroniza o título da janela no desktop e recarrega SÓ o
+        // conteúdo, reabrindo este popup e preservando o scroll da lista —
+        // pro usuário o popup nunca "fecha" nem "recarrega o programa".
+        if(reason === 'lang'){
+          const tag = (val('preferred_locale') || 'en');
+
+          try{
+            document.cookie = 'lang=' + encodeURIComponent(tag) +
+              '; path=/; max-age=' + (60*60*24*365) + '; samesite=Lax';
+          }catch(_){}
+
+          await __applyLangDesktop(tag); // no desktop, só atualiza o título
+
+          try{ sessionStorage.setItem('showSavedHint','1'); }catch(_){}
+          try{ sessionStorage.setItem('stReopenAfterReload','1'); }catch(_){}
+          try{ sessionStorage.setItem('keep_scroll','1'); }catch(_){}
+          setHint('{{ _("Saved") }}');
+          location.reload();
+          return;
+        }
+
+        // Explorer dir: atualiza o defaultPath do "Salvar como" no Desktop
+        if(reason === 'explorer'){
+          const dir = (val('explorer_dir') || '');
+          await __applyExplorerDirDesktop(dir);
+          setHint('{{ _("Saved") }}');
+          return;
+        }
+
+        // Outros (data_dir etc.)
+        setHint('{{ _("Saved") }}');
+      })
+      .catch(()=> setHint('{{ _("Failed to save") }}'))
+      .finally(()=>{ setTimeout(()=>setHint(''),1600); inflight=null; });
+  }
+
+  function debounceSaveOther(){ if(saveTimer)clearTimeout(saveTimer); saveTimer=setTimeout(()=>submitForm('other'),420); }
+function debounceSaveExplorer(){ if(saveTimer)clearTimeout(saveTimer); saveTimer=setTimeout(()=>submitForm('explorer'),420); }
+
+  const themeSel = $('theme_mode');
+  const langSel  = $('preferred_locale');
+  const dataDir  = $('data_dir');
+  const expDir   = $('explorer_dir');
+
+  if(themeSel) themeSel.addEventListener('change', ()=>submitForm('theme'));
+  if(langSel)  langSel.addEventListener('change',  ()=>submitForm('lang'));
+
+  function bindAutoSave(el, reason, deb){
+    if(!el) return;
+    el.addEventListener('input', deb);
+    el.addEventListener('change', ()=>submitForm(reason));
+    el.addEventListener('blur', ()=>{
+      if (window.__suppressNextBlurSave){ window.__suppressNextBlurSave=false; return; }
+      submitForm(reason);
+    });
+  }
+
+  bindAutoSave(dataDir, 'other', debounceSaveOther);
+  bindAutoSave(expDir,  'explorer', debounceSaveExplorer);
+
+  window.__settingsAutoSave = (reason)=>submitForm(reason || 'other');
+})();
+
+/* ===== Integração Desktop ===== */
+async function openDir(id){
+  const p = val(id);
+  if(!p){ alert('{{ _("Enter a valid directory.") }}'); return; }
+  try{
+    const api = __desktopApi();
+    if(api && typeof api.open_directory === 'function'){
+      const ok = await api.open_directory(p);
+      if(!ok) alert('{{ _("Could not open in Explorer.") }}');
+    }else{
+      alert('{{ _("Explorer integration is unavailable outside the desktop app.") }}');
+    }
+  }catch(e){ console.error(e); alert('{{ _("Error opening the directory.") }}'); }
+}
+
+async function chooseDir(id){
+  const cur = val(id);
+  try{
+    const api = __desktopApi();
+    if(!(api && typeof api.choose_directory === 'function')){
+      alert('{{ _("Folder selection is only available in the desktop app.") }}');
+      return;
+    }
+
+    const chosen = await api.choose_directory(cur);
+    if(!chosen) return; // cancelado
+
+    const el = $(id);
+    if(el){
+      if(id === 'data_dir') el.value = __withSSMDataSuffix(chosen);
+      else el.value = __normSlashes(chosen);
+      try{ el.focus(); }catch(_){}
+    }
+
+    __normalizeDirField(id);
+
+    if (typeof window.__settingsAutoSave === 'function'){
+      window.__settingsAutoSave(id === 'explorer_dir' ? 'explorer' : 'other');
+    }
+  }catch(e){
+    console.error(e);
+    alert('{{ _("Error choosing the directory.") }}');
+  }
+}
+
+/* ===== Data tools ===== */
+function __download(url, filename){
+  const a=document.createElement('a');
+  a.href=url;
+  if(filename) a.download=filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+async function exportData(){
+  try{
+    setHint('{{ _("Saving…") }}');
+
+    const r = await fetch('/data/export', {credentials:'same-origin'});
+    const j = await r.json().catch(()=>null);
+    if(!j || !j.ok){
+      setHint('{{ _("Failed to save") }}');
+      return;
+    }
+
+    const filename = j.filename || 'data.json';
+    const url = j.download_url;
+
+    // ✅ Desktop (Electron): certeza de “salvou” ou “cancelou”
+    const api = __desktopApi();
+    if(api && typeof api.save_as_from_url === 'function'){
+      const res = await api.save_as_from_url(url, filename);
+      if(res && res.canceled){
+        setHint(''); // cancelou
+        return;
+      }
+      if(res && res.ok){
+        setHint('{{ _("Saved") }}'); // ✅ só aqui
+        setTimeout(()=>setHint(''),1600);
+        return;
+      }
+      setHint('{{ _("Failed to save") }}');
+      return;
+    }
+
+    // Fallback (browser): não tem como saber se salvou/cancelou
+    __download(url, filename);
+    setHint('{{ _("Downloading…") }}');
+    setTimeout(()=>setHint(''),1600);
+
+  }catch(e){
+    console.error(e);
+    setHint('{{ _("Failed to save") }}');
+  }
+}
+
+function triggerImport(){
+  const f = $('importFile');
+  if(f){ f.value=''; f.click(); }
+}
+
+(function(){
+  const f = $('importFile');
+  if(!f) return;
+
+  f.addEventListener('change', async function(){
+    const file = (f.files && f.files[0]) ? f.files[0] : null;
+    if(!file) return;
+
+    try{
+      setHint('{{ _("Saving…") }}');
+      const fd = new FormData();
+      fd.append('file', file, file.name || 'data.json');
+
+      const r = await fetch('/data/import', {
+        method:'POST',
+        body:fd,
+        credentials:'same-origin'
+      });
+      const j = await r.json().catch(()=>null);
+
+      if(!j || !j.ok){
+        const msg = (j && (j.detail || j.error)) ? String(j.detail || j.error) : '{{ _("Failed to save") }}';
+        setHint(msg);
+        return;
+      }
+
+      setHint(`{{ _("Saved") }} — ${j.added_sales||0} sales, ${j.added_clients||0} clients`);
+      // ✅ recarrega a página pra a lista (Vendas/Clientes) mostrar os dados importados
+      setTimeout(()=>{ try{ location.reload(); }catch(_){ location.href = location.pathname + location.search; } }, 900);
+    }catch(e){
+      console.error(e);
+      setHint('{{ _("Failed to save") }}');
+    }
+  });
+})();
+
+/* =========================================================
+   ✅ RESET CONFIRM (HTML) — sem confirm() nativo
+   ========================================================= */
+let __resetPrevFocus = null;
+let __resetOpen = false;
+
+function openResetConfirm(){
+  const bd = $('resetConfirm');
+  if(!bd) return;
+
+  __resetPrevFocus = document.activeElement;
+  __resetOpen = true;
+
+  // trava scroll do conteúdo atrás (mantém coesão e evita “scroll fantasma”)
+  const body = $('stBody');
+  if(body){ body.dataset.prevOverflow = body.style.overflow || ''; body.style.overflow = 'hidden'; }
+
+  bd.classList.remove('is-closing');
+  bd.hidden = false;
+
+  // foco no botão perigoso (ação principal)
+  setTimeout(()=>{
+    const go = $('resetConfirmGo');
+    if(go && typeof go.focus === 'function') go.focus();
+  }, 0);
+}
+
+function closeResetConfirm(){
+  const bd = $('resetConfirm');
+  if(!bd || bd.hidden) return;
+
+  __resetOpen = false;
+
+  bd.classList.add('is-closing');
+  const ms = (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 0 : 150;
+
+  setTimeout(()=>{
+    bd.hidden = true;
+    bd.classList.remove('is-closing');
+
+    const body = $('stBody');
+    if(body){
+      const prev = (body.dataset.prevOverflow ?? '');
+      body.style.overflow = prev;
+      delete body.dataset.prevOverflow;
+    }
+
+    try{ __resetPrevFocus && __resetPrevFocus.focus && __resetPrevFocus.focus(); }catch(_){}
+    __resetPrevFocus = null;
+  }, ms);
+}
+
+// clique no backdrop fecha
+(function(){
+  const bd = $('resetConfirm');
+  if(!bd) return;
+
+  bd.addEventListener('pointerdown', (e)=>{
+    if(e.target === bd) closeResetConfirm();
+  });
+})();
+
+// ESC fecha (o confirm de reset, se aberto; senão o popup de Settings)
+document.addEventListener('keydown', (e)=>{
+  if(e.key !== 'Escape') return;
+  if(__resetOpen){
+    e.preventDefault();
+    closeResetConfirm();
+    return;
+  }
+  const bd = $('stBackdrop');
+  if(bd && !bd.hidden && !bd.classList.contains('is-closing')){
+    e.preventDefault();
+    closePopup();
+  }
+});
+
+// clique no backdrop (fora do cartão) também fecha o popup de Settings
+document.addEventListener('pointerdown', (e)=>{
+  const bd = $('stBackdrop');
+  if(bd && !bd.hidden && e.target === bd) closePopup();
+});
+
+async function resetAllDataConfirmed(){
+  // fecha o confirm primeiro (mais “limpo”), depois executa
+  closeResetConfirm();
+
+  try{
+    setHint('{{ _("Saving…") }}');
+    const r = await fetch('/data/reset', {method:'POST', credentials:'same-origin'});
+    const j = await r.json().catch(()=>null);
+    if(!j || !j.ok){
+      setHint('{{ _("Failed to save") }}');
+      return;
+    }
+    closePopupTo(j.redirect || '/welcome');
+  }catch(e){
+    console.error(e);
+    setHint('{{ _("Failed to save") }}');
+  }
+}
+
+/* ✅ Settings pode rodar como página cheia (standalone) ou embutido em
+   Vendas/Clientes/Nova Venda (management.html) — embutido, o popup só
+   esconde/mostra, sem navegar nada (sem iframe, sem os bugs que isso dava). */
+function __stEmbedded(){ return document.body.classList.contains('main-chrome'); }
+
+function openStPopup(){
+  const bd = $('stBackdrop');
+  if(!bd) return;
+  bd.hidden = false;
+  bd.classList.remove('is-closing');
+}
+
+/* Variante do close que permite destino custom (ex.: reset manda pra /welcome
+   — isso é sempre navegação de verdade, mesmo estando embutido) */
+function closePopupTo(url){
+  if(__closing) return;
+  __closing=true;
+
+  try{ sessionStorage.removeItem('stReturnUrl'); }catch(_){}
+
+  const bd = $('stBackdrop');
+  if(bd) bd.classList.add('is-closing');
+
+  const ms = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 320;
+  setTimeout(()=>{
+    __closing=false;
+    location.href = url;
+  }, ms);
+}
+
+/* ===== Fechar (com animação reversa) ===== */
+let __closing=false;
+function closePopup(){
+  if(__closing) return;
+  __closing=true;
+
+  const bd = $('stBackdrop');
+  if(bd) bd.classList.add('is-closing');
+  const embedded = __stEmbedded();
+
+  const ms = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 320;
+  setTimeout(()=>{
+    __closing=false;
+    if(embedded){
+      if(bd){ bd.hidden = true; bd.classList.remove('is-closing'); }
+      return;
+    }
+    location.href = __getReturnUrl();
+  }, ms);
+}
+
+(function(){
+  // Reabre o popup após um reload disparado pela troca de idioma
+  // (ver submitForm('lang')): pro usuário, o popup nunca "fecha".
+  let reopen = false;
+  try{ reopen = sessionStorage.getItem('stReopenAfterReload') === '1'; }catch(_){}
+  try{ sessionStorage.removeItem('stReopenAfterReload'); }catch(_){}
+
+  if(__stEmbedded()){
+    const bd = $('stBackdrop');
+    if(reopen){ openStPopup(); }
+    else if(bd){ bd.hidden = true; }
+    window.openStPopup = openStPopup;
+  }
+})();
+</script>

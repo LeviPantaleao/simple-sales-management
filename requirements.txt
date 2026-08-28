@@ -1,0 +1,6 @@
+flask
+flask-babel
+babel
+pillow
+fpdf2
+pyinstaller

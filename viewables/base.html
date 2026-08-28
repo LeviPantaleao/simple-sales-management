@@ -1,0 +1,1232 @@
+<!doctype html>
+{% set _lang = current_lang_tag() if current_lang_tag is defined else (request.headers.get('Accept-Language','en').split(',')[0] or 'en') %}
+{% set _ep = request.endpoint if request is defined else '' %}
+
+{% set _page_title = {
+  'list_clients': _('Clients'),
+  'list_sales': _('Sales'),
+  'new_sale': _('New Sale'),
+  'settings_page': _('Settings'),
+  'business': _('Business')
+}.get(_ep, _('Clients & Sales')) %}
+
+{% set _show_chrome = _ep in ['list_sales','list_clients','new_sale'] %}
+
+<html lang="{{ _lang|replace('_','-') }}"
+      dir="{{ text_dir() if text_dir is defined else 'ltr' }}"
+      class="{{ '' if _show_chrome else 'popup-host' }}">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no"/>
+  <meta name="color-scheme" content="light dark"/>
+  <title>{% block title %}{{ _page_title }}{% endblock %}</title>
+
+  <!-- Shared helpers (desktop bridge, popup/lock mechanics, money format) -->
+  <script src="{{ url_for('app_common_js') }}"></script>
+
+  <!-- Boot: nav fade (popups suaves), sidebar state, theme initial (anti-flash) -->
+  <script>
+  (function(){
+    try{
+      var html=document.documentElement;
+      var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      // pywebview desktop: otimizações de render (menos blur/efeitos pesados)
+      try{
+        var isPy=!!(window.pywebview && window.pywebview.api);
+        if(isPy){
+          html.classList.add('pywebview');
+          // blur/backdrop-filter costuma custar caro no pywebview (principalmente com listas + fixed)
+          html.classList.add('no-blur');
+          try{ if('scrollRestoration' in history) history.scrollRestoration='manual'; }catch(e){}
+        }
+      }catch(e){}
+
+      // popups: entrada com overlay (oculta carregamento da página destino)
+      if(!reduce && sessionStorage.getItem('nav_fade')==='1') html.classList.add('nav-in');
+
+      // seções principais (Vendas/Clientes/Nova Venda): fade leve de entrada
+      {% if _show_chrome %}
+      if(!reduce) html.classList.add('section-enter');
+      {% endif %}
+
+      // sidebar boot (aplica dataset antes do 1º paint)
+      html.classList.add('sidebar-boot');
+      try{
+        var v=localStorage.getItem('sidebar_collapsed');
+        html.dataset.sidebar=(v==='1')?'collapsed':'expanded';
+      }catch(e){}
+      (window.requestAnimationFrame?requestAnimationFrame:function(fn){setTimeout(fn,0)})(function(){
+        (window.requestAnimationFrame?requestAnimationFrame:function(fn){setTimeout(fn,0)})(function(){
+          try{ html.classList.remove('sidebar-boot'); }catch(e){}
+        });
+      });
+
+      // theme initial (anti-flash) — ✅ server (Settings) tem prioridade sobre localStorage
+      try{
+        var LS_KEY='theme_mode';
+        var serverMode='{{ (current_theme_mode() if current_theme_mode is defined else "")|e }}';
+        serverMode=String(serverMode||'').trim().toLowerCase();
+
+        var saved='';
+        try{ saved=String(localStorage.getItem(LS_KEY)||'').trim().toLowerCase(); }catch(e){ saved=''; }
+
+        // server vence sempre que existir (evita "stale" localStorage)
+        var mode = (serverMode ? serverMode : (saved || 'auto'));
+        if(mode!=='dark' && mode!=='light' && mode!=='auto') mode='auto';
+
+        // sincroniza localStorage com o Settings salvo no servidor (para consistência no Electron/pywebview)
+        if(serverMode){
+          try{ if(saved!==mode) localStorage.setItem(LS_KEY, mode); }catch(e){}
+        }
+
+        var mql=window.matchMedia?window.matchMedia('(prefers-color-scheme: dark)'):{matches:false};
+        var wantsDark=(mode==='dark')||(mode==='auto'&&mql.matches);
+        if(wantsDark) html.classList.add('dark'); else html.classList.remove('dark');
+        html.dataset.theme=mode;
+
+        // opcional: ajuda alguns UAs/controles nativos
+        try{ html.style.colorScheme = wantsDark ? 'dark' : 'light'; }catch(e){}
+      }catch(e){}
+    }catch(e){}
+  })();
+  </script>
+
+  <style>
+  :root{
+    /* ✅ CONTROLE MANUAL */
+    --overlay-fade-in: 140ms;
+    --overlay-fade-out: 320ms;
+    --overlay-release-delay: 440ms;
+    --overlay-release-delay-list: 180ms;
+    --popup-enter-duration: 220ms;
+
+    /* DARK (default) — cinza neutro com um leve viés FRIO (canal azul um
+       pouco acima do vermelho); antes tinha um tom quente/amarelado. */
+    --bg:#1b1c1e;--text:#dadbdd;--muted:#96979b;--card:#242527;--border:#313235;--icon:#dadbdd;
+    --accent:#39a55a;
+    /* ✅ "branco" único do programa: o creme F6F1DD. Não há branco puro na
+       paleta — todo texto/glifo sobre o verde (--accent), sobre o vermelho
+       de perigo, e os realces claros usam este mesmo token nos dois temas
+       (o accent é verde em light e dark, então o creme não precisa de
+       override). Antes estava espalhado como #f6f1dd / #fff soltos. */
+    --paper:#f2f1ed;
+    --hover-bg:#28292c;
+    --shadow:none;--shadow-strong:none;
+
+    --scroll-track:#1b1c1e;--scroll-thumb:#494a4e;--scroll-corner:#1b1c1e;
+
+    --radius-lg:10px;--radius-md:8px;--radius-sm:4px;
+    --border-strong: color-mix(in srgb, var(--border) 90%, var(--text) 10%);
+
+    /* Logo upload UI (Business/Welcome) — cada página pode sobrescrever a escala */
+    --logo-size: clamp(120px, 18vw, 220px);
+
+    --sidebar-w:260px;--sidebar-w-collapsed:64px;--sidebar-current-w:var(--sidebar-w);
+    --sidebar-anim:220ms;
+
+    /* (mantidos aqui porque searchbar.html usa) */
+    --page-search-w:1022px;
+    --page-search-overlap:0px;--page-search-h:0px;
+    --page-search-min-h:66px;
+
+    --page-search-compact-total:1022px;
+    --page-search-gap:12px;
+
+    --float-anim:220ms;
+
+    --bf:saturate(120%) blur(4px);
+
+    /* inputs (theme-aware via overrides below) */
+    --input-bg:color-mix(in srgb,var(--card) 70%,transparent);
+    --input-border:var(--border);
+  }
+
+  /* pywebview: reduzir custos de animação/blur (mantém o layout) */
+  html.pywebview{
+    --overlay-fade-in: 110ms;
+    --overlay-fade-out: 240ms;
+    --overlay-release-delay: 320ms;
+    --popup-enter-duration: 170ms;
+  }
+
+  /* LIGHT THEME (quando NÃO estiver .dark) — cinza neutro com leve viés FRIO */
+  html:not(.dark){
+    --bg:#dedfe1;--text:#2a2b2e;--muted:#6d6f74;--card:#e9eaec;--border:#ccced1;--icon:#2a2b2e;
+    --hover-bg:#d9dadd;
+
+    --scroll-track:#d9dadd;--scroll-thumb:#aeb0b5;--scroll-corner:#d9dadd;
+
+    --shadow:none;
+    --shadow-strong:none;
+
+    --input-bg:color-mix(in srgb,var(--card) 70%,transparent);
+    --input-border:color-mix(in srgb,var(--border) 95%,transparent);
+  }
+
+  html[data-sidebar="collapsed"], body.sidebar-collapsed{ --sidebar-current-w:var(--sidebar-w-collapsed); }
+
+  /* ✅ Impede o "arrastar" nativo de links/imagens: por padrão isso mostra
+     um preview do sistema com a URL de verdade (http://127.0.0.1:<porta>/…)
+     — uma tecnicidade do backend local que não deve aparecer pro usuário
+     final. Reforçado em JS (app-common.js, dragstart) pro caso do Chromium
+     ignorar isso em algum elemento. */
+  a, img{ -webkit-user-drag:none; user-drag:none; }
+
+  *{box-sizing:border-box; scrollbar-color:var(--scroll-thumb) var(--scroll-track);}
+  *::-webkit-scrollbar{width:10px;height:10px}
+  *::-webkit-scrollbar-track{background:var(--scroll-track)}
+  *::-webkit-scrollbar-thumb{background:var(--scroll-thumb);border-radius:8px;border:2px solid var(--scroll-track)}
+  *::-webkit-scrollbar-corner{background:var(--scroll-corner)}
+
+  /* pywebview: evita “pulos” por troca de gutter / âncoras de scroll */
+  body{
+    margin:0;
+    min-height:100vh;
+    background:var(--bg);
+    color:var(--text);
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    transition:background-color .18s ease, color .18s ease;
+  }
+
+  body.main-chrome{height:100vh;overflow:hidden}
+  .keep-shell{display:flex;flex-direction:column;height:100vh;min-height:100vh}
+
+  html.popup-host,.popup-host body{height:100%;min-height:100%}
+  .popup-host body{overflow:hidden}
+
+  .bg-wrap{position:fixed;inset:0;z-index:0;overflow:hidden;background:var(--bg)}
+  .bg-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:0;opacity:0;transition:opacity 160ms ease}
+  .bg-dim{position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none}
+
+  html.no-blur{--bf:none}
+  html.no-blur .bg-dim{
+    backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+  }
+
+  .glass{
+    background:color-mix(in srgb,var(--card) 70%,transparent);
+    border:1px solid color-mix(in srgb,var(--border) 80%,transparent);
+    backdrop-filter:var(--bf);-webkit-backdrop-filter:var(--bf);
+    transform:translate3d(0,0,0);backface-visibility:hidden;will-change:transform,opacity;
+    box-shadow:none;
+  }
+
+  /* popup host: garante que o “sheet” apareça sem reflow/scroll */
+  .popup-host .app{position:relative;z-index:1001;padding:0;overflow:visible;min-height:100vh;background:transparent}
+
+  /* popup sheet enter */
+  html.popup-host .app{
+    opacity:0;
+    transform:translateY(2px) scale(.99);
+    transition:opacity var(--popup-enter-duration) ease,transform var(--popup-enter-duration) ease;
+    will-change:opacity,transform
+  }
+  html.popup-host.popup-ready .app{opacity:1;transform:translateY(0) scale(1)}
+
+  .sidebar{
+    position:fixed;top:0;bottom:0;left:0;width:var(--sidebar-current-w);
+    padding:8px 4px 10px 8px;background:var(--card);border-right:1px solid var(--border);
+    display:flex;flex-direction:column;gap:6px;overflow-y:auto;overflow-x:hidden;z-index:900;
+    transition:width var(--sidebar-anim) ease, background-color .18s ease, border-color .18s ease;
+    will-change:width;
+  }
+  html.sidebar-boot .sidebar, html.sidebar-boot #btnSidebarToggle svg{transition:none!important}
+
+  .sidebar-head{
+    display:flex;align-items:center;gap:10px;
+    padding:6px 6px 10px 2px;background:var(--card);
+    position:sticky;top:0;z-index:1;
+  }
+
+  .iconbtn{
+    width:40px;height:40px;border-radius:8px;
+    border:1px solid transparent;background:transparent;color:var(--icon);
+    display:grid;place-items:center;cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+    padding:0;line-height:0;font-size:0;
+    /* ✅ sem isso, dentro do .sidebar-head (flex row) o botão encolhia junto
+       com o .sidebar-title durante a animação de largura da sidebar (ambos
+       têm flex-shrink:1 por padrão) e "estalava" de volta a 40px assim que
+       o título esgotava seu próprio espaço — a "balançada horizontal" no
+       fim da animação de minimizar. */
+    flex:0 0 auto;
+    transition:background var(--sidebar-anim) ease, transform .06s ease, border-color var(--sidebar-anim) ease;
+    outline:none;
+  }
+  .iconbtn:hover{background:var(--hover-bg);border-color:transparent}
+  .iconbtn:active{transform:translateY(1px)}
+  .iconbtn svg{width:20px;height:20px;display:block}
+  .iconbtn:focus,.iconbtn:focus-visible{outline:none!important;box-shadow:none!important}
+
+  #btnSidebarToggle svg{transform-origin:50% 50%;transition:transform var(--sidebar-anim) ease}
+  html[data-sidebar="collapsed"] #btnSidebarToggle svg, body.sidebar-collapsed #btnSidebarToggle svg{transform:rotate(-90deg)}
+
+  .sidebar-title{font-size:1.05rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;transition:opacity .12s ease}
+  html[data-sidebar="collapsed"] .sidebar-title, body.sidebar-collapsed .sidebar-title{opacity:0;pointer-events:none}
+  body.sidebar-label-collapsed .sidebar-title{display:none!important}
+  html[data-sidebar="collapsed"] .sidebar > .nav-item, body.sidebar-collapsed .sidebar > .nav-item{display:none!important}
+
+  body.main-chrome .app{margin-left:var(--sidebar-current-w)}
+
+  /* ✅ NÃO é uma barra visível (sem background/borda) — é só o espaçamento
+     reservado no topo do conteúdo (ao lado da sidebar, não dentro dela) pro
+     botão de Settings, no canto direito. Vai só até onde a sidebar termina
+     (margin-left acompanha a largura dela), nunca se estende por cima.
+     Mesma altura de .sidebar-head (56px) pelo mesmo padding vertical.
+     z-index acima da família da searchbar de management.html
+     (.page-search-row 1600, .page-actions 1700, .actdial 1800,
+     .fab-hint 1900, .bulk-panel 3100), senão o FAB de ações cobria o botão
+     ao rolar a lista. */
+  .content-topbar{
+    position:relative;
+    margin-left:var(--sidebar-current-w);
+    flex:0 0 auto;
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    padding:14px 10px 2px;
+    z-index:4000;
+  }
+
+  .app{
+    flex:1 1 auto;
+    position:relative;
+    padding:20px 24px 32px;
+    min-height:0;
+    overflow-y:auto;
+    min-width:0;
+    overflow-anchor:none;
+    overscroll-behavior:contain;
+  }
+
+  .nav-item{
+    display:flex;align-items:center;gap:16px;border-radius:8px;padding:8px 14px 8px 12px;
+    color:var(--text);text-decoration:none;font-size:.95rem;cursor:pointer;position:relative;
+    outline:none;transition:background .16s ease,border-color .16s ease;
+  }
+  .nav-item-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .12s ease}
+  .nav-item:hover{background:var(--hover-bg)}
+  .nav-item.active{
+    background:color-mix(in srgb,var(--accent) 18%,transparent);
+    border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);
+    color:var(--text);
+  }
+  .nav-item:focus-visible{
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent);
+  }
+
+  .nav-ico{width:20px;height:20px;display:grid;place-items:center;flex:0 0 auto;color:var(--icon);opacity:.92}
+  .nav-ico svg{width:20px;height:20px;display:block}
+
+  /* ===== Business: fixo no rodapé da sidebar (Settings mudou para
+     .content-topbar, no canto superior direito do conteúdo) ===== */
+  .sidebar-bottom{
+    margin-top:auto;
+    display:flex;
+    flex-direction:row-reverse; /* ícone à esquerda, nome preenchendo o resto */
+    align-items:center;
+    gap:4px;
+    padding-top:8px;
+    border-top:1px solid var(--border);
+  }
+  .sidebar-bottom .nav-item{flex:0 0 auto}
+  .sidebar-bottom .biz-label{flex:1 1 auto;min-width:0;cursor:default}
+
+  /* hover: ilumina só o ícone (squircle que preenche o ícone), não a linha inteira */
+  .sidebar-bottom .nav-item:hover{background:transparent}
+  .sidebar-bottom .nav-ico{width:32px;height:32px;border-radius:8px;transition:background var(--sidebar-anim) ease}
+  .sidebar-bottom .nav-ico svg{width:22px;height:22px}
+  .sidebar-bottom .nav-item:hover .nav-ico{background:var(--hover-bg)}
+
+  /* ✅ empilha em coluna só quando a legenda já saiu do fluxo (mesma classe
+     de .sidebar-title/nav-item-label acima) — se isso ficasse preso ao
+     data-sidebar (instantâneo), a legenda virava item de coluna ANTES de
+     sumir, abrindo um vão entre os ícones que só fechava ~220ms depois
+     (quando o display:none finalmente chegava): dois movimentos em vez de
+     um, a "animação conflitando com a legenda" reportada. */
+  body.sidebar-label-collapsed .sidebar-bottom{
+    flex-direction:column; /* colapsada: nome empilha acima do ícone do Business */
+    align-items:stretch;
+  }
+  html[data-sidebar="collapsed"] .sidebar-bottom .nav-item-label, body.sidebar-collapsed .sidebar-bottom .nav-item-label{opacity:0;pointer-events:none}
+  body.sidebar-label-collapsed .sidebar-bottom .nav-item-label{display:none!important}
+
+  /* ===== transição leve entre seções (Vendas/Clientes/Nova Venda) ===== */
+  body.main-chrome .app{transition:opacity 160ms ease}
+  html.section-leave body.main-chrome .app{opacity:0}
+  html.section-enter body.main-chrome .app{opacity:0;transition:none}
+
+  @media (prefers-reduced-motion: reduce){
+    .sidebar,.bg-wrap iframe,html.popup-host .app{transition:none!important}
+    #btnSidebarToggle svg{transition:none!important;transform:none!important}
+    html.popup-host .app{transform:none!important;opacity:1!important}
+    body.main-chrome .app{transition:none!important;opacity:1!important}
+    .sidebar-title,.nav-item-label{transition:none!important}
+    body{transition:none!important}
+  }
+
+  /* forms/shared */
+  .container{max-width:1000px;margin:0 auto;background:var(--card);border-radius:var(--radius-lg);border:1px solid var(--border);padding:24px;min-width:0;transition:background-color .18s ease, border-color .18s ease}
+  h1{margin:0 0 8px;font-size:1.5rem}
+  .group{margin-top:18px}
+  .legend{font-weight:700;margin-bottom:12px}
+  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  @media (max-width:720px){ .grid{ grid-template-columns:1fr; } }
+  .field{display:flex;flex-direction:column}
+  label{font-size:.9rem;margin-bottom:6px;color:var(--muted)}
+  input[type="text"],input[type="file"],textarea,select{padding:10px 12px;border:1px solid var(--border);border-radius:8px;outline:0;background-color:var(--card);color:var(--text)}
+  input[type="text"]:focus,textarea:focus,select:focus{border-color:var(--accent)}
+
+  /* ✅ Select (Idioma/Tema, etc.): mesma moldura dos inputs + seta própria
+     com respiro na direita, no lugar da seta nativa colada no canto. */
+  select{
+    appearance:none;-webkit-appearance:none;
+    padding-right:34px;cursor:pointer;
+    background-repeat:no-repeat;
+    background-position:right 12px center;
+    background-size:12px 12px;
+    background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='24'%20height='24'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%2396979b'%20stroke-width='2.5'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpolyline%20points='6%209%2012%2015%2018%209'/%3E%3C/svg%3E");
+  }
+  html:not(.dark) select{
+    background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='24'%20height='24'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%236d6f74'%20stroke-width='2.5'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpolyline%20points='6%209%2012%2015%2018%209'/%3E%3C/svg%3E");
+  }
+  select::-ms-expand{display:none}
+  select:focus{border-color:var(--accent)}
+  select option{background:var(--card);color:var(--text)}
+  input[type="text"]:read-only{cursor:default;color:var(--muted)}
+  input[type="text"]:read-only:focus{box-shadow:none;border-color:var(--border)}
+  textarea{resize:none;min-height:44px;max-height:60vh;line-height:1.35;overflow:auto;white-space:pre-wrap;field-sizing:content}
+  input[type="checkbox"],input[type="radio"]{accent-color:var(--accent)}
+
+  /* ✅ Feedback claro de campo inválido (contorno vermelho + chacoalhada) —
+     usado por sale.html e pela ferramenta de desconto em management.html */
+  @keyframes inputShake{
+    0%{ transform:translateX(0) }
+    18%{ transform:translateX(-4px) }
+    36%{ transform:translateX(4px) }
+    54%{ transform:translateX(-3px) }
+    72%{ transform:translateX(3px) }
+    100%{ transform:translateX(0) }
+  }
+  input[type="text"].invalid,
+  textarea.invalid{
+    border-color: var(--danger, #c74848) !important;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger, #c74848) 26%, transparent) !important;
+    animation: inputShake 260ms ease-in-out;
+  }
+  html.dark,html.dark body,html.dark input,html.dark select,html.dark textarea,html.dark button,html.dark .group{color-scheme:dark}
+  html:not(.dark),html:not(.dark) body,html:not(.dark) input,html:not(.dark) select,html:not(.dark) textarea,html:not(.dark) button,html:not(.dark) .group{color-scheme:light}
+
+  .chiprow{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{display:inline-block;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card);text-decoration:none;color:var(--text);font-size:.9rem;transition:background .15s ease,border-color .15s ease,filter .15s ease}
+  .chip:hover{filter:brightness(.98)}
+  .chip.active{
+    background:color-mix(in srgb,var(--accent) 18%,transparent);
+    border-color:color-mix(in srgb,var(--accent) 40%,transparent);
+    color:var(--text);
+  }
+  .chip.icon-only{display:inline-flex;align-items:center;justify-content:center;padding:7px;line-height:0}
+  .chip.icon-only svg{width:16px;height:16px;display:block}
+  /* ✅ ícone + palavra direta (ex.: seta + "Crescente") em vez de só ícone */
+  .chip.icon-text{display:inline-flex;align-items:center;gap:6px;padding:6px 10px 6px 8px}
+  .chip.icon-text svg{width:16px;height:16px;display:block;flex:0 0 auto}
+
+  /* ✅ Linha de botões do rodapé (Confirmar/Cancelar/Cadastrar/Salvar…):
+     separador acima, espelhando o border-bottom do .popup-header no topo —
+     mesmo padrão que .picker-actions e .footer-actions (welcome) já usam. */
+  .actions{
+    margin-top:16px;
+    padding-top:14px;
+    border-top:1px solid var(--border);
+    display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;
+  }
+  button,.btn{padding:10px 14px;border:0;border-radius:8px;cursor:pointer;font-weight:700;font-family:inherit;transition:filter .15s ease,background .15s ease,transform .08s ease,box-shadow .15s ease,opacity .15s ease}
+  button:active,.btn:active{transform:translateY(1px)}
+  .primary{
+    background:var(--accent);color:var(--paper);
+    border-radius:10px;padding:12px 16px;font-weight:800;letter-spacing:.2px;
+    transition:filter .16s ease, transform .06s ease, opacity .15s ease;
+  }
+  .primary:hover{filter:brightness(1.06)}
+  .primary:active{transform:translateY(1px)}
+  .primary.icon-only{padding:12px 20px;display:inline-flex;align-items:center;justify-content:center;line-height:0}
+  .primary.icon-only svg{width:20px;height:20px;display:block}
+  /* ✅ ícone + palavra direta (ex.: check + "Salvar") em vez de só ícone —
+     um "check" sozinho não diz se é Salvar, Vender, Cadastrar, Alterar... */
+  .primary.icon-text{padding:12px 18px;display:inline-flex;align-items:center;gap:8px;letter-spacing:.2px}
+  .primary.icon-text svg{width:20px;height:20px;display:block;flex:0 0 auto}
+  .secondary{background:var(--border);color:var(--text)}
+  .secondary:hover{filter:brightness(1.03)}
+  .btn{background:var(--accent);color:var(--bg)}
+  .btn:hover{filter:brightness(1.06)}
+  .btn.danger{background:#b91c1c;color:var(--paper)}
+
+  .flash{padding:12px 14px;border-radius:8px;margin-bottom:12px;font-weight:600}
+  .flash.success{background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent)}
+  .flash.error{background:rgba(185,28,28,.10);color:#ef4444;border:1px solid rgba(239,68,68,.35)}
+
+  .icon-btn{border:none;background:transparent;border-radius:8px;padding:8px;cursor:pointer;color:var(--icon);display:grid;place-items:center;line-height:0;font-size:0;transition:background .15s ease,transform .08s ease}
+  .icon-btn:hover{background:var(--hover-bg)}
+  .icon-btn:active{transform:translateY(1px)}
+  .icon-btn.danger{background:rgba(185,28,28,.12)}
+  .icon-btn.danger:hover{background:rgba(185,28,28,.18)}
+  dialog{border:none;padding:0}
+  /* ✅ Garante que o atributo "hidden" sempre vença, mesmo quando uma classe
+     do próprio elemento (ex.: .btn, .pair) também define "display" — sem
+     isso, elementos com display:flex/inline-flex ficam visíveis mesmo
+     com [hidden] presente. */
+  [hidden]{ display:none !important; }
+
+  /* ===== Botão fechar "X" (igual em todos os popups: Business/Settings/gerenciamento) ===== */
+  .popup-close{
+    --s:28px;
+    position:relative;
+    width:var(--s);
+    height:var(--s);
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    background:transparent;
+    border:none;
+    cursor:pointer;
+    color:var(--muted);
+    border-radius:8px;
+    transition:background .18s ease,color .18s ease,transform .06s ease;
+    outline:none;
+  }
+  .popup-close::before,.popup-close::after{
+    content:"";
+    position:absolute;
+    width:14px;
+    height:2px;
+    background:currentColor;
+    border-radius:2px;
+    opacity:.95;
+  }
+  .popup-close::before{ transform:rotate(45deg); }
+  .popup-close::after{ transform:rotate(-45deg); }
+  .popup-close:hover{ background:color-mix(in srgb,var(--text) 6%,transparent); color:var(--text); }
+  .popup-close:active{ transform:translateY(1px); }
+  .popup-close:focus-visible{
+    outline:2px solid color-mix(in srgb,var(--accent, #39a55a) 55%,transparent);
+    outline-offset:2px;
+  }
+
+  /* ===== Logo upload UI (igual em Business/Welcome; escala via --logo-size) ===== */
+  .logo-area{ border:none; border-radius:0; padding:0; background:transparent; }
+  .logo-flex{ display:flex; align-items:flex-start; justify-content:flex-start; gap:16px; flex-wrap:wrap; }
+  .logo-wrap{ position:relative; width:var(--logo-size); max-width:min(var(--logo-size),92vw); }
+  .logo-figure{ margin:0; border:1px solid var(--border); border-radius:10px; padding:10px; background:var(--card); box-shadow:var(--shadow); }
+  .logo-img{ display:block; width:100%; height:auto; border-radius:8px; }
+  .logo-drop{
+    width:var(--logo-size); height:var(--logo-size);
+    max-width:min(var(--logo-size),92vw); max-height:min(var(--logo-size),34vh);
+    border:1px dashed var(--border); border-radius:10px; background:var(--card);
+    display:grid; place-items:center;
+  }
+  /* ✅ ícone placeholder (mesmo estilo de ícone do resto do app: stroke
+     currentColor, traços arredondados) exibido quando ainda não há logo */
+  .logo-drop-icon{ width:38%; height:38%; color:var(--icon); opacity:.55; }
+  /* ✅ drop-zone <-> preview: fade leve ao trocar em vez de aparecer no corte */
+  .logo-figure, .logo-drop{ animation:logoFadeIn 180ms ease; }
+  @keyframes logoFadeIn{ from{ opacity:0; } to{ opacity:1; } }
+  @media (prefers-reduced-motion: reduce){
+    .logo-figure, .logo-drop{ animation:none!important; }
+  }
+  /* ✅ selo circular no canto inferior direito da imagem — usado tanto pelo
+     botão "Adicionar" (ícone +) quanto "Remover" (ícone x); os dois nunca
+     ficam visíveis ao mesmo tempo, então dividem a mesma posição/forma. */
+  .logo-corner-btn{
+    --s:30px;
+    appearance:none;
+    position:absolute;
+    right:8px; bottom:8px;
+    height:var(--s);
+    display:inline-flex; align-items:center; gap:6px;
+    padding:0 10px;
+    background:color-mix(in srgb,var(--card) 78%,transparent);
+    border:1px solid var(--border);
+    border-radius:8px;
+    cursor:pointer;
+    color:var(--text);
+    font-size:.82rem; font-weight:700; font-family:inherit; white-space:nowrap; line-height:1;
+    box-shadow:var(--shadow);
+    transition:background .16s ease,transform .06s ease;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .logo-corner-btn svg{ width:16px; height:16px; display:block; flex:0 0 auto; }
+  /* ✅ mesmo ajuste do .img-ctl (management.html): sobe o texto 1px pra
+     alinhar visualmente com o ícone dentro do flex centralizado */
+  .logo-corner-btn span{ transform:translateY(-1px); }
+  .logo-corner-btn:hover{ background:color-mix(in srgb,var(--text) 8%,var(--card)); }
+  .logo-corner-btn:active{ transform:translateY(1px); }
+  .file-hidden{
+    position:absolute!important; width:1px!important; height:1px!important;
+    opacity:0!important; pointer-events:none!important; left:-9999px!important; top:-9999px!important;
+  }
+
+  /* ===== Picker popup (Selecionar Cliente / Ver / Editar / Imprimir) — igual
+     em sale.html e management.html, com escala via media queries abaixo ===== */
+  .picker-backdrop{
+    position:fixed; inset:0; z-index:1002;
+    display:grid; place-items:center; padding:24px;
+    background:rgba(0,0,0,.55);
+    opacity:0;
+    pointer-events:none;
+    transition:opacity 160ms cubic-bezier(.22,.61,.36,1);
+    will-change:opacity;
+    overscroll-behavior:contain;
+  }
+  .picker-backdrop.open{ opacity:1; pointer-events:auto; }
+  .picker-backdrop.leaving{ opacity:0; pointer-events:none; }
+
+  .picker-sheet{
+    position:fixed; left:50%; top:50%;
+    width:min(660px,92vw); max-height:88vh;
+    background:var(--card); color:var(--text);
+    border:1px solid var(--border-strong);
+    border-radius:var(--radius-lg);
+    box-shadow:var(--shadow-strong);
+    display:flex; flex-direction:column; overflow:hidden;
+    opacity:0;
+    transform:translate(-50%,-50%) scale(.99);
+    transition:transform 180ms cubic-bezier(.22,.61,.36,1), opacity 180ms cubic-bezier(.22,.61,.36,1);
+    will-change:transform,opacity;
+  }
+  .picker-sheet:focus,.picker-sheet:focus-visible{ outline:none !important; }
+  .picker-backdrop.open .picker-sheet{ opacity:1; transform:translate(-50%,-50%) scale(1); }
+
+  .picker-header{
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:14px 16px;
+    border-bottom:1px solid var(--border);
+    background:var(--card);
+  }
+  .picker-title{ margin:0; font-size:1.02rem; font-weight:900; color:var(--text); }
+
+  .picker-body{ padding:14px; overflow:hidden; flex:1 1 auto; min-height:0; }
+  .picker-body.scroll{ overflow:auto; -webkit-overflow-scrolling:touch; }
+
+  /* ===== Shell de popup de página inteira (Business / Settings / Redefinir)
+     — caixa, posicionamento, cor e z-index comuns. Cada popup só
+     acrescenta o padding do backdrop, a max-height do sheet e a própria
+     animação de entrada/saída (com sua classe de estado). Antes isto
+     estava recriado do zero em businesspopup.html e settingspopup.html. */
+  .popup-backdrop{
+    position:fixed; inset:0; z-index:5000;
+    display:grid; place-items:center;
+    background:rgba(0,0,0,.40);
+  }
+  .popup-sheet{
+    width:min(660px,92vw);
+    background:var(--card); color:var(--text);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-strong);
+    display:flex; flex-direction:column;
+    overflow:hidden;
+  }
+
+  /* ===== Header/título de popup de página inteira (Business/Settings) ===== */
+  .popup-header{
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:12px 14px;
+    border-bottom:1px solid var(--border);
+    position:sticky; top:0;
+    background:var(--card);
+    z-index:1;
+  }
+  .popup-title{ margin:0; font-size:1.08rem; font-weight:700; }
+
+  .picker-actions{
+    display:flex; align-items:center; justify-content:flex-end; gap:10px;
+    padding:14px 16px;
+    border-top:1px solid var(--border);
+    background:color-mix(in srgb, var(--card) 92%, #121518);
+    flex-wrap:wrap;
+  }
+
+  @media (max-height:760px){ .picker-body{ padding:10px; } }
+  @media (max-height:640px){ .picker-backdrop.open .picker-sheet{ transform:translate(-50%,-50%) scale(.94); } }
+  @media (max-height:560px){ .picker-backdrop.open .picker-sheet{ transform:translate(-50%,-50%) scale(.90); } }
+  @media (max-height:460px){
+    .picker-backdrop{ padding:10px; }
+    .picker-header{ padding:10px 12px; }
+    .picker-backdrop.open .picker-sheet{ transform:translate(-50%,-50%) scale(.86); }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .picker-backdrop, .picker-sheet{ transition:none !important; }
+  }
+
+  /* ===== Campo de Valor + ações de desconto (Nova Venda e Editar venda) =====
+     Componente que estava idêntico nos dois <style> de management.html.
+     Só a moldura do overlay do valor riscado (.amount-overlay / .amount-final,
+     cores/padding) e o padding-right do input ficam locais em management. */
+  .input-wrap{ position:relative; width:100%; min-width:0; --disc-reserve:0px; }
+  .input-wrap input[type="text"]{ width:100%; }
+  .input-wrap:has(> .client-actions > .btn:not([hidden]))  { --disc-reserve:96px; }
+  .input-wrap:has(> .client-actions > .pair:not([hidden])) { --disc-reserve:150px; }
+  .input-wrap > .client-actions{
+    position:absolute; top:50%; right:6px; transform:translateY(-50%);
+    margin:0; min-height:0; z-index:2;
+    /* "Desconto" e o par "Alterar/Remover" na MESMA célula do grid: na troca
+       se sobrepõem (crossfade) em vez de um empurrar o outro pra esquerda. */
+    display:grid; justify-items:end; align-items:center;
+  }
+  .input-wrap > .client-actions > .btn,
+  .input-wrap > .client-actions > .pair{ grid-area:1 / 1; }
+  .input-wrap > .client-actions .btn{
+    min-height:30px; padding:6px 10px; font-size:.82rem; background:transparent;
+  }
+  /* com desconto ativo: "Alterar" com a borda no verde do campo travado
+     (.locked); "Remover" com a borda vermelha (ação destrutiva). */
+  .input-wrap > .client-actions > .pair .btn{
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  }
+  .input-wrap > .client-actions > .pair .btn.btn-danger{
+    border-color: color-mix(in srgb, var(--danger, #c74848) 45%, var(--border));
+  }
+  </style>
+
+  {% block head %}{% endblock %}
+</head>
+
+<body class="{{ 'main-chrome' if _show_chrome else '' }}">
+  {% set _page_content %}{% block content %}{% endblock %}{% endset %}
+  {# mensagens do flash() do server (ex.: erros de validação do post_new_sale) #}
+  {% set _flash = get_flashed_messages(with_categories=true) %}
+
+  {% if not _show_chrome %}
+    <div class="bg-wrap" aria-hidden="true">
+      <iframe id="bgFrame" title="Background" scrolling="no"></iframe>
+      <div class="bg-dim"></div>
+    </div>
+  {% endif %}
+
+  {% if _show_chrome %}
+  <div class="keep-shell">
+    <aside class="sidebar" id="sideNav">
+      <div class="sidebar-head">
+        <button type="button" class="iconbtn" id="btnSidebarToggle" aria-label="{{ _('Toggle menu') }}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+        <div class="sidebar-title">{{ _page_title }}</div>
+      </div>
+
+      <a href="{{ url_for('list_sales') }}" class="nav-item {% if _ep == 'list_sales' %}active{% endif %}">
+        <span class="nav-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="21" r="1"></circle>
+            <circle cx="20" cy="21" r="1"></circle>
+            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+          </svg>
+        </span>
+        <span class="nav-item-label">{{ _('Sales') }}</span>
+      </a>
+
+      <a href="{{ url_for('list_clients') }}" class="nav-item {% if _ep == 'list_clients' %}active{% endif %}">
+        <span class="nav-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+        </span>
+        <span class="nav-item-label">{{ _('Clients') }}</span>
+      </a>
+
+      <a href="{{ url_for('new_sale') }}" class="nav-item {% if _ep == 'new_sale' %}active{% endif %}">
+        <span class="nav-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <path d="M14 2v6h6"></path>
+            <line x1="12" y1="12" x2="12" y2="18"></line>
+            <line x1="9" y1="15" x2="15" y2="15"></line>
+          </svg>
+        </span>
+        <span class="nav-item-label">{{ _('New Sale') }}</span>
+      </a>
+
+      <div class="sidebar-bottom">
+        <span class="nav-item-label biz-label" title="{{ BUSINESS.name or _('Business') }}">{{ BUSINESS.name or _('Business') }}</span>
+
+        <a id="btnOpenBusiness" href="{{ url_for('business') }}" class="nav-item" title="{{ BUSINESS.name or _('Business') }}" aria-label="{{ BUSINESS.name or _('Business') }}">
+          <span class="nav-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 9l1-4h16l1 4"></path>
+              <path d="M4 9h16v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"></path>
+              <path d="M8 21V13h8v8"></path>
+            </svg>
+          </span>
+        </a>
+      </div>
+    </aside>
+
+    <div class="content-topbar">
+      <a id="btnOpenSettings" href="{{ url_for('settings_page') }}" class="iconbtn" title="{{ _('Settings') }}" aria-label="{{ _('Settings') }}">
+        <svg viewBox="0 0 24 24" fill="currentColor" stroke-width="2.4">
+          <circle cx="12" cy="5" r="1.8"></circle>
+          <circle cx="12" cy="12" r="1.8"></circle>
+          <circle cx="12" cy="19" r="1.8"></circle>
+        </svg>
+      </a>
+    </div>
+
+    <main class="app" id="appScroller">
+      {% for _cat, _msg in _flash %}<div class="flash {{ _cat }}">{{ _msg }}</div>{% endfor %}
+      {{ _page_content }}
+    </main>
+  </div>
+  {% else %}
+  <main class="app">
+    {% for _cat, _msg in _flash %}<div class="flash {{ _cat }}">{{ _msg }}</div>{% endfor %}
+    {{ _page_content }}
+  </main>
+  {% endif %}
+
+  <script>
+  (function(){
+    var IS_MAIN={{ 'true' if _show_chrome else 'false' }};
+    var EP='{{ _ep|e }}';
+    window.__VAGO_TEXT={{ _('(Blank)')|tojson }};
+
+    var d=document, w=window, html=document.documentElement;
+    var reduce=!!(w.matchMedia&&w.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+    var qs=function(s,root){try{return (root||d).querySelector(s)}catch(e){return null}};
+    var onReady=function(fn){
+      if(d.readyState==='loading') d.addEventListener('DOMContentLoaded',fn,{once:true});
+      else fn();
+    };
+    var raf2=function(fn){ (w.requestAnimationFrame||function(f){setTimeout(f,0)})(function(){ (w.requestAnimationFrame||function(f){setTimeout(f,0)})(fn); }); };
+
+    function parseTimeToMs(v, fallback){
+      try{
+        v=String(v||'').trim();
+        if(!v) return fallback;
+        if(v.endsWith('ms')) return Math.max(0, parseFloat(v));
+        if(v.endsWith('s')) return Math.max(0, parseFloat(v)*1000);
+        var n=parseFloat(v);
+        return isFinite(n)?Math.max(0,n):fallback;
+      }catch(e){ return fallback; }
+    }
+
+    function overlayReleaseDelayMs(){
+      try{
+        var cs=w.getComputedStyle(html);
+        var base=parseTimeToMs(cs.getPropertyValue('--overlay-release-delay'), 0);
+        if(EP==='list_sales' || EP==='list_clients'){
+          var extra=parseTimeToMs(cs.getPropertyValue('--overlay-release-delay-list'), 0);
+          return base + extra;
+        }
+        return base;
+      }catch(e){ return 0; }
+    }
+
+    // ✅ garante que o breu “pegue” na seção atual antes do unload
+    function navNextFrame(url){
+      try{ void d.documentElement.offsetHeight; }catch(e){}
+      (w.requestAnimationFrame||function(fn){setTimeout(fn,0)})(function(){
+        w.location.href=url;
+      });
+    }
+
+    // ===== theme apply + bridge =====
+    (function(){
+      var LS_KEY='theme_mode';
+
+      function sanitize(v){
+        v=String(v||'').trim().toLowerCase();
+        if(v!=='dark' && v!=='light' && v!=='auto') v='auto';
+        return v;
+      }
+
+      function applyTheme(){
+        try{
+          var mql=w.matchMedia?w.matchMedia('(prefers-color-scheme: dark)'):{matches:false};
+          var mode=sanitize(html.dataset.theme||'auto');
+          var wantsDark=(mode==='dark')||(mode==='auto'&&mql.matches);
+          html.classList.toggle('dark',wantsDark);
+          try{ html.style.colorScheme = wantsDark ? 'dark' : 'light'; }catch(e){}
+
+          try{
+            if(w.pywebview&&w.pywebview.api&&w.pywebview.api.set_native_theme){
+              w.pywebview.api.set_native_theme(wantsDark?'dark':'light');
+            }
+          }catch(e){}
+        }catch(e){}
+      }
+
+      // exposto para páginas (ex.: settings.html) atualizarem visual imediatamente
+      w.__setThemeMode=function(mode){
+        var v=sanitize(mode||'auto');
+        try{ localStorage.setItem(LS_KEY,v); }catch(e){}
+        html.dataset.theme=v;
+        applyTheme();
+      };
+
+      // se outra parte do app escrever no localStorage, aplica também
+      try{
+        w.addEventListener('storage',function(ev){
+          if(!ev) return;
+          if(ev.key===LS_KEY){
+            html.dataset.theme=sanitize(ev.newValue||'auto');
+            applyTheme();
+          }
+        });
+      }catch(e){}
+
+      // ✅ settings.html: se existir o select, aplica no front imediatamente
+      onReady(function(){
+        var sel=qs('#theme_mode');
+        if(!sel) return;
+        try{
+          var v=sanitize(sel.value||'auto');
+          html.dataset.theme=v;
+          applyTheme();
+        }catch(e){}
+        sel.addEventListener('change',function(){
+          try{ w.__setThemeMode(sel.value||'auto'); }catch(e){}
+        });
+      });
+
+      try{ w.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyTheme); }catch(e){}
+      applyTheme();
+    })();
+
+    // ===== sidebar collapsed =====
+    (function(){
+      if(!IS_MAIN) return;
+      var btn=qs('#btnSidebarToggle');
+      function readCollapsed(){
+        try{
+          var ds=html.dataset.sidebar||'';
+          if(ds==='collapsed') return true;
+          if(ds==='expanded') return false;
+        }catch(e){}
+        try{ return localStorage.getItem('sidebar_collapsed')==='1'; }catch(e){}
+        return false;
+      }
+      var labelHideTimer=null;
+      function applyCollapsed(c, immediate){
+        c=!!c;
+        try{ html.dataset.sidebar=c?'collapsed':'expanded'; }catch(e){}
+        try{ d.body.classList.toggle('sidebar-collapsed',c); }catch(e){}
+        // ✅ o texto (rótulo) esmaece rápido, mas só sai do layout de vez
+        // (display:none, que também vira a sidebar-bottom p/ coluna) depois
+        // que a sidebar termina de encolher — evita o texto sumir no corte
+        // antes da largura acabar de animar, e evita a legenda virar item de
+        // coluna (abrindo um vão) antes de já estar fora do fluxo.
+        // No boot (immediate=true) não há animação em andamento: aplica na
+        // hora, senão a sidebar já carrega colapsada mas com a legenda ainda
+        // em layout de linha por ~220ms.
+        if(labelHideTimer) clearTimeout(labelHideTimer);
+        if(c){
+          if(reduce || immediate){ d.body.classList.add('sidebar-label-collapsed'); }
+          else{ labelHideTimer=setTimeout(function(){ d.body.classList.add('sidebar-label-collapsed'); }, 220); }
+        }else{
+          d.body.classList.remove('sidebar-label-collapsed');
+        }
+        return c;
+      }
+      applyCollapsed(readCollapsed(), true);
+      if(btn) btn.addEventListener('click',function(){
+        var next=!readCollapsed();
+        applyCollapsed(next);
+        try{ localStorage.setItem('sidebar_collapsed',next?'1':'0'); }catch(e){}
+      });
+    })();
+
+    // ===== main: persist scroll for popup bg (mas NÃO restaurar scroll entre seções main) =====
+    (function(){
+      if(!IS_MAIN) return;
+      // ✅ Quando esta página é carregada dentro do #bgFrame (fundo desfocado
+      // de Business/Settings), NÃO deve consumir/zerar as flags de retorno
+      // (keep_scroll/force_scroll_top) — quem faz isso é a página de topo ao
+      // voltar de verdade. Sem essa guarda, o iframe "rouba" o flag one-shot
+      // e a página real volta sempre para o topo.
+      try{ if(w.top !== w.self) return; }catch(e){}
+
+      var KEY_URL='main_url', KEY_SCROLL='prev_scroll_y';
+      var KEY_KEEP='keep_scroll';
+      var KEY_FORCE='force_scroll_top';
+
+      try{
+        var ds=html.dataset.sidebar||'';
+        d.body.classList.toggle('sidebar-collapsed', ds==='collapsed');
+      }catch(e){}
+
+      var scroller=qs('#appScroller')||qs('.app');
+      if(!scroller) return;
+
+      function persistNow(){
+        try{ sessionStorage.setItem(KEY_URL,location.href); }catch(e){}
+        try{ sessionStorage.setItem(KEY_SCROLL,String(scroller.scrollTop||0)); }catch(e){}
+        try{ sessionStorage.setItem(KEY_KEEP,'1'); }catch(e){}
+      }
+      // ✅ Business/Settings abertos como popup embutido (o caso comum aqui)
+      // nunca navegam de verdade, então nada nunca lê esse scroll salvo —
+      // só persiste quando o clique realmente vai cair no fallback de
+      // navegação (função de popup correspondente ainda não existe nesta
+      // página).
+      var openFnById={ btnOpenBusiness:'openBizPopup', btnOpenSettings:'openStPopup' };
+      ['btnOpenBusiness','btnOpenSettings'].forEach(function(id){
+        var a=qs('#'+id); if(!a) return;
+        a.addEventListener('click',function(e){
+          if(typeof window[openFnById[id]]==='function') return;
+          persistNow(e);
+        },{capture:true});
+      });
+
+      function save(){ try{ sessionStorage.setItem(KEY_SCROLL,String(scroller.scrollTop||0)); }catch(e){} }
+
+      function restore(){
+        var keep=false, force=false;
+        try{ keep=sessionStorage.getItem(KEY_KEEP)==='1'; }catch(e){}
+        try{ force=sessionStorage.getItem(KEY_FORCE)==='1'; }catch(e){}
+
+        if(keep && !force){
+          var y=0; try{ y=parseInt(sessionStorage.getItem(KEY_SCROLL)||'0',10)||0; }catch(e){}
+          try{ scroller.scrollTop=y; }catch(e){}
+        }else{
+          try{ scroller.scrollTop=0; }catch(e){}
+          try{ sessionStorage.setItem(KEY_SCROLL,'0'); }catch(e){}
+        }
+
+        try{ sessionStorage.removeItem(KEY_KEEP); }catch(e){}
+        try{ sessionStorage.removeItem(KEY_FORCE); }catch(e){}
+      }
+
+      try{ sessionStorage.setItem(KEY_URL,location.href); }catch(e){}
+      scroller.addEventListener('scroll',save,{passive:true});
+      w.addEventListener('pagehide',save);
+      d.addEventListener('visibilitychange',function(){ if(d.visibilityState==='hidden') save(); },{passive:true});
+
+      onReady(function(){ restore(); save(); });
+    })();
+
+    // ===== popup background iframe + popup-ready =====
+    // (Business/Settings agora só usam isso quando acessados como página
+    // cheia de verdade — embutidos em management.html eles nem existem
+    // como popup-host separado, então esse bloco todo não roda pra eles)
+    (function(){
+      if(IS_MAIN) return;
+
+      var KEY_URL='main_url', KEY_SCROLL='prev_scroll_y';
+      var mainURL=''; try{ mainURL=sessionStorage.getItem(KEY_URL)||''; }catch(e){}
+      var useURL=mainURL||'/';
+      try{ var u=new URL(useURL,location.href); if(u.pathname===location.pathname) useURL='/'; }catch(e){ useURL='/'; }
+
+      var y=0; try{ y=parseInt(sessionStorage.getItem(KEY_SCROLL)||'0',10)||0; }catch(e){}
+      var frame=qs('#bgFrame'); if(!frame) return;
+
+      frame.style.pointerEvents='none';
+      try{ frame.loading='eager'; }catch(e){}
+      try{ frame.src=useURL; }catch(e){ frame.src='/'; }
+
+      frame.addEventListener('load',function(){
+        try{
+          var w2=frame.contentWindow, doc=w2.document;
+          try{
+            doc.documentElement.dataset.theme = html.dataset.theme || 'auto';
+            doc.documentElement.classList.toggle('dark',html.classList.contains('dark'));
+            try{ doc.documentElement.style.colorScheme = html.classList.contains('dark') ? 'dark' : 'light'; }catch(e){}
+          }catch(e){}
+          try{
+            var sc=doc.getElementById('appScroller')||doc.querySelector('.app');
+            if(sc) sc.scrollTop=y; else w2.scrollTo(0,y);
+          }catch(e){}
+          try{
+            var css=
+              'html,body{overflow:hidden!important;height:100%!important}'+
+              '#appScroller,.app{overflow-y:scroll!important;overflow-x:hidden!important;pointer-events:none!important;overscroll-behavior:none!important}'+
+              '#appScroller,.app{scrollbar-color:transparent transparent!important}'+
+              '#appScroller::-webkit-scrollbar,.app::-webkit-scrollbar{background:transparent!important}'+
+              '#appScroller::-webkit-scrollbar-thumb,.app::-webkit-scrollbar-thumb{background:transparent!important;border:0!important}'+
+              '#appScroller::-webkit-scrollbar-track,.app::-webkit-scrollbar-track{background:transparent!important}'+
+              '#appScroller::-webkit-scrollbar-corner,.app::-webkit-scrollbar-corner{background:transparent!important}';
+            var st=doc.createElement('style'); st.type='text/css'; st.appendChild(doc.createTextNode(css)); doc.head.appendChild(st);
+          }catch(e){}
+        }catch(e){}
+
+        (w.requestAnimationFrame||function(fn){setTimeout(fn,0)})(function(){
+          frame.style.opacity='1';
+        });
+
+        try{
+          html.classList.add('popup-ready');
+          if(reduce){
+            html.classList.remove('nav-in');
+            try{ sessionStorage.removeItem('nav_fade'); }catch(e){}
+          }else{
+            raf2(function(){
+              var hold=overlayReleaseDelayMs();
+              setTimeout(function(){
+                try{ html.classList.remove('nav-in'); }catch(e){}
+                try{ sessionStorage.removeItem('nav_fade'); }catch(e){}
+              }, hold);
+            });
+          }
+        }catch(e){}
+      });
+    })();
+
+    // ===== notify native =====
+    (function(){
+      function notifyNative(){
+        try{
+          var lang=html.getAttribute('lang')||'en';
+          if(w.pywebview&&w.pywebview.api&&w.pywebview.api.set_title_for_lang) w.pywebview.api.set_title_for_lang(lang);
+          var wantsDark=html.classList.contains('dark');
+          if(w.pywebview&&w.pywebview.api&&w.pywebview.api.set_native_theme) w.pywebview.api.set_native_theme(wantsDark?'dark':'light');
+        }catch(e){}
+      }
+      onReady(notifyNative);
+      d.addEventListener('pywebviewready',notifyNative,{once:true});
+    })();
+
+    // ===== nav fade for popups (Business/Settings/welcome) + main section navigation SEM fade =====
+    (function(){
+      var POP_BUS='{{ url_for("business")|e }}';
+      var POP_SET='{{ url_for("settings_page")|e }}';
+
+      var MAIN_SALES='{{ url_for("list_sales")|e }}';
+      var MAIN_CLIENTS='{{ url_for("list_clients")|e }}';
+      var MAIN_NEWSALE='{{ url_for("new_sale")|e }}';
+
+      function pathnameOf(href){ try{ return (new URL(href,location.href)).pathname; }catch(e){ return ''; } }
+      var P_BUS=pathnameOf(POP_BUS), P_SET=pathnameOf(POP_SET);
+      var P_SALES=pathnameOf(MAIN_SALES);
+      var P_CLIENTS=pathnameOf(MAIN_CLIENTS);
+      var P_NEWSALE=pathnameOf(MAIN_NEWSALE);
+
+      function isPopupHref(href){
+        var p=pathnameOf(href);
+        return !!p && (p===P_BUS || p===P_SET);
+      }
+      function isMainSectionHref(href){
+        var p=pathnameOf(href);
+        return !!p && (p===P_SALES || p===P_CLIENTS || p===P_NEWSALE);
+      }
+      function isSameOrigin(href){
+        try{ var u=new URL(href,location.href); return u.origin===location.origin; }catch(e){ return false; }
+      }
+
+      function shouldSkip(a,e){
+        if(!a) return true;
+        if(a.target && a.target!=='_self') return true;
+        if(e.metaKey||e.ctrlKey||e.shiftKey||e.altKey) return true;
+
+        var href=(a.getAttribute('href')||'').trim();
+        if(!href||href[0]==='#') return true;
+        if(href.startsWith('javascript:')||href.startsWith('mailto:')||href.startsWith('tel:')) return true;
+        if(!isSameOrigin(a.href)) return true;
+
+        try{
+          var u=new URL(a.href,location.href);
+          if(u.pathname===location.pathname && u.search===location.search && u.hash===location.hash) return true;
+        }catch(_e){}
+
+        var originIsPopup=html.classList.contains('popup-host');
+        var destIsPopup=isPopupHref(a.href);
+        var originIsMain=!originIsPopup;
+        var destIsMain=isMainSectionHref(a.href);
+
+        if(originIsPopup || destIsPopup) return false;
+        if(originIsMain && destIsMain) return false;
+
+        return true;
+      }
+
+      function goPopup(url){
+        if(reduce){ location.href=url; return; }
+        try{ sessionStorage.setItem('nav_fade','1'); }catch(e){}
+        try{ html.classList.add('nav-leave'); }catch(e){}
+        navNextFrame(url);
+      }
+
+      // ✅ main sections: fade leve de saída (mantém a leveza, sem overlay pesado)
+      function goSectionNoFade(url){
+        try{ sessionStorage.setItem('force_scroll_top','1'); }catch(e){}
+        try{ sessionStorage.removeItem('keep_scroll'); }catch(e){}
+        try{ sessionStorage.setItem('prev_scroll_y','0'); }catch(e){}
+        if(reduce){ navNextFrame(url); return; }
+        try{ html.classList.add('section-leave'); }catch(e){}
+        setTimeout(function(){ navNextFrame(url); }, 120);
+      }
+
+      d.addEventListener('click',function(e){
+        var a=e.target&&e.target.closest?e.target.closest('a[href]'):null;
+
+        if(a && a.classList && a.classList.contains('nav-item') && a.classList.contains('active')){
+          if(!(a.target && a.target!=='_self') && !(e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)){
+            e.preventDefault();
+            return;
+          }
+        }
+
+        if(shouldSkip(a,e)) return;
+
+        var href=a.href;
+        var p=pathnameOf(href);
+
+        var originIsPopup=html.classList.contains('popup-host');
+        var destIsPopup=isPopupHref(href);
+        var destIsMain=isMainSectionHref(href);
+
+        e.preventDefault();
+
+        // ✅ Business/Settings: implementados direto em management.html
+        // (Vendas/Clientes) como popups embutidos, sem iframe — se esta
+        // página já tem o popup (window.openXPopup existe), só abre ele;
+        // senão (Welcome, acesso direto a essas rotas) cai no comportamento
+        // antigo de navegação normal. Nova Venda continua sendo uma seção
+        // de verdade (navegação normal), igual Vendas/Clientes.
+        if(p===P_BUS && typeof window.openBizPopup==='function'){ window.openBizPopup(); return; }
+        if(p===P_SET && typeof window.openStPopup==='function'){ window.openStPopup(); return; }
+
+        if(originIsPopup || destIsPopup){ goPopup(href); return; }
+        if(destIsMain){ goSectionNoFade(href); return; }
+
+        navNextFrame(href);
+      },{capture:true});
+
+      function clearEntry(){
+        if(reduce){
+          try{ html.classList.remove('nav-in','nav-leave','section-enter'); }catch(e){}
+          try{ sessionStorage.removeItem('nav_fade'); }catch(e){}
+          return;
+        }
+
+        if(!html.classList.contains('popup-host')){
+          raf2(function(){
+            var hold=overlayReleaseDelayMs();
+            setTimeout(function(){
+              try{ html.classList.remove('nav-in','nav-leave'); }catch(e){}
+              try{ sessionStorage.removeItem('nav_fade'); }catch(e){}
+            }, hold);
+          });
+        }
+
+        // ✅ fade leve de entrada nas seções: solta logo após o 1º paint (independe do overlay de popup)
+        raf2(function(){ try{ html.classList.remove('section-enter'); }catch(e){} });
+      }
+      onReady(clearEntry);
+
+      w.addEventListener('pageshow',function(ev){
+        if(!ev.persisted) return;
+        try{ html.classList.remove('nav-in','nav-leave','section-leave','section-enter'); }catch(e){}
+        try{ sessionStorage.removeItem('nav_fade'); }catch(e){}
+        try{ if(html.classList.contains('popup-host')) html.classList.add('popup-ready'); }catch(e){}
+      });
+    })();
+  })();
+  </script>
+</body>
+</html>

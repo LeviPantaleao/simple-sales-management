@@ -1,0 +1,1113 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Welcome') }}{% endblock %}
+
+{% block head %}
+<style>
+/* ===================== WELCOME (central popup over Sales bg) ===================== */
+/* pywebview: evita scroll duplo / “pulo” de viewport */
+html.popup-host, html.popup-host body{
+  height:100%;
+  overflow:hidden;
+}
+
+
+/* Centraliza o “sheet” no meio da página */
+.popup-host .app{
+  padding:0 !important;
+  min-height:100vh;
+  display:grid;
+  place-items:center;
+}
+
+/* Sheet (popup central) — ✅ um pouco mais larga que Settings/Business
+   (min(760px, 92vw) em vez de 660px) bem em prol de precisar de menos
+   altura: com mais largura, a grade de Negócio (#panel-biz .grid, abaixo)
+   passa de 2 pra 3 colunas — os mesmos 6 campos cabem em 2 linhas em vez
+   de 3, então a etapa mais alta (a que define a altura de todas via
+   .panels-stack) fica mais baixa. A proporção mínima também ficou mais
+   "achatada" (2:1 em vez de 16:9) acompanhando a largura maior. */
+.container.welcome-sheet{
+  width: min(760px, 92vw);
+  min-height: min(calc(760px / 2), calc(92vw / 2));
+  max-height: calc(100vh - 8px);
+  padding:0 !important;
+  overflow:hidden;
+  box-shadow: var(--shadow-strong);
+
+  display:flex;                 /* ✅ permite área interna rolar */
+  flex-direction:column;
+}
+
+/* ✅ Se o popup aumentar, aparece scrollbar aqui */
+.welcome-scroll{
+  flex:1 1 auto;
+  min-height:0;
+  overflow:auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  padding:14px;
+}
+
+/* Compacta espaçamentos “de topo” */
+.wizard-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:8px; }
+/* ✅ escala maior que o h1 padrão (1.5rem) — é a primeira coisa que a
+   pessoa vê no app, pode ter mais presença. .wizard-sub sobe junto
+   (mesma proporção título:subtítulo de antes) pra continuar coeso. */
+.wizard-title{ margin:0; font-size:1.85rem; font-weight:900; letter-spacing:.2px; }
+.wizard-sub{ margin:6px 0 0; font-size:1.05rem; color:var(--muted); line-height:1.4; }
+
+/* ✅ mesmo separador do rodapé (border + margin/padding simétricos), só
+   que embaixo das etapas (entre elas e o conteúdo) em vez de acima dos
+   botões */
+.stepper{
+  display:flex; gap:6px; flex-wrap:wrap;
+  margin-top:14px; margin-bottom:12px;
+  padding-bottom:12px;
+  border-bottom:1px solid var(--border);
+}
+
+/* ✅ Mesmo desenho do .chip/.chip.active (management.html) — nada de pílula
+   nem "bolinha" de indicador: só o retângulo com o mesmo destaque de accent
+   que os chips de filtro (Mês/Ano) já usam em outras telas. */
+.step{
+  display:inline-flex; align-items:center;
+  padding:6px 10px;
+  border-radius:8px;
+  border:1px solid var(--border);
+  background: var(--card);
+  font-weight:800;
+  color:var(--text);
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+  user-select:none;
+  transition:border-color .15s ease,background .15s ease;
+}
+.step.active{
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--text);
+}
+
+/* ✅ Equaliza o tamanho do popup entre as 3 etapas: os painéis ficam
+   empilhados na MESMA célula do grid (todos "presentes" ao mesmo tempo,
+   só o ativo visível) — a altura da célula acompanha o mais alto dos três,
+   então a caixa não muda de tamanho ao trocar de etapa. */
+.panels-stack{ display:grid; }
+.panels-stack > .panel{
+  grid-area: 1 / 1;
+  visibility:hidden;
+  opacity:0;
+  pointer-events:none;
+}
+.panels-stack > .panel.active{
+  visibility:visible;
+  opacity:1;
+  pointer-events:auto;
+  animation:panelFadeIn 180ms ease both;
+}
+@keyframes panelFadeIn{ from{ opacity:0; transform:translateY(4px); } to{ opacity:1; transform:translateY(0); } }
+@media (prefers-reduced-motion: reduce){
+  .panels-stack > .panel.active{ animation:none!important; }
+}
+
+/* ✅ centraliza o conteúdo em Y dentro da altura equalizada pelo
+   .panels-stack (o painel já estica pro tamanho da célula por padrão do
+   grid — align-items:stretch — então só falta virar flex-column
+   centralizado). Nas 3 etapas por igual — inclusive Negócio, que hoje
+   define a altura da célula mas pode não definir mais se o conteúdo
+   mudar (ex.: campos a menos, tela maior). */
+#panel-intro, #panel-prefs, #panel-biz{
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+/* ✅ Preferências: centralizada em X e Y como a Introdução — os três
+   campos ficam numa coluna só (idioma → tema → diretório), todos com a
+   mesma largura. O diretório usa essa mesma largura: o input encolhe pra
+   caber "Abrir"/"Escolher…" na própria linha (ver .dir-row). */
+#panel-prefs{ align-items:center; }
+#panel-prefs .grid{
+  grid-template-columns:1fr;
+  width:min(367px, 100%);   /* 340 × 1.08 */
+  gap:15px;                  /* 14 × 1.08 */
+}
+/* ✅ +8% na escala dos elementos de Preferências (era +20%, reduzido 10%) —
+   tipo, respiro e dimensões dos controles, escala explícita como na
+   Introdução (sem transform/zoom). */
+#panel-prefs .field label{ font-size:1.08em; margin-bottom:5px; }
+#panel-prefs .field select{ font-size:1.08em; padding:10px 37px 10px 12px; }
+#panel-prefs .field input[type="text"]{ font-size:1.08em; padding:10px 12px; }
+#panel-prefs .dir-row{ gap:9px; }
+#panel-prefs .dir-row .secondary{ font-size:1.08em; padding:11px 15px; }
+/* ✅ Negócio: é a etapa mais alta (quase preenche a célula), então
+   alinhado ao topo — sem respiro extra. Topo um pouco mais enxuto que
+   os demais grupos (menos margin/padding) pra começar logo abaixo das
+   etapas, colado como na referência. */
+#panel-biz{ justify-content:flex-start; align-items:center; }
+.welcome-sheet #panel-biz{ margin-top:6px; padding-top:8px; }
+/* ✅ Negócio: Logo + os 4 campos restantes (Nome, Telefone, Endereço,
+   Tax ID) numa coluna só, centralizada no meio — mesma disposição da
+   etapa Preferências e do popup de Negócio. */
+#panel-biz > .field,
+#panel-biz .grid{ width:min(480px, 100%); }
+#panel-biz > .field{ text-align:center; }
+#panel-biz .logo-flex{ justify-content:center; }
+
+/* ✅ Diretório: mesma linha do Settings (input readonly + botões .secondary,
+   sem componentes próprios) — dir-row/small-btn foram removidos daqui. */
+/* ✅ grid (não flex) — mesmo esquema do Settings (1fr auto auto): os
+   botões ficam do tamanho do próprio texto e nunca "empurram" a linha
+   pra quebrar mais cedo do que precisa */
+.dir-row{ display:grid; grid-template-columns:1fr auto auto; gap:8px; align-items:center; }
+@media (max-width:480px){ .dir-row{ grid-template-columns:1fr; } }
+/* ✅ o caminho pode ser mais comprido que o espaço disponível — encolhe
+   (min-width:0 quebra o mínimo padrão do input dentro do grid) e corta
+   com reticências em vez de forçar os botões pra quebrar de linha */
+.dir-row input[type="text"]{
+  min-width:0;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
+
+/* ✅ Os 4 campos de Negócio em 2×2 (2 em cima, 2 embaixo), abaixo do Logo. */
+#panel-biz .grid{ grid-template-columns:1fr 1fr; gap:14px; }
+@media (max-width:560px){ #panel-biz .grid{ grid-template-columns:1fr; } }
+
+/* ===== Introdução ===== */
+/* ✅ Sem ícone: título + descrição dentro de UM bloco de leitura (~46ch),
+   centrado horizontalmente no painel (align-items:center) e em Y
+   (justify-content da regra dos três painéis). Como h2 e p ficam no mesmo
+   contêiner, suas bordas esquerdas coincidem exatamente. */
+#panel-intro{ align-items:center; text-align:left; }
+.intro-body{ max-width:46ch; }
+
+.intro-title{
+  margin:0 0 10px;
+  font-size:1.65rem;   /* +20% */
+  font-weight:800;
+  letter-spacing:.2px;
+  color:var(--text);
+}
+
+/* Medida de leitura ~46ch (faixa tipográfica recomendada 45–75ch).
+   line-height 1.6 e cor levemente puxada pra --muted: título forte,
+   corpo mais calmo. */
+.intro-lead{
+  margin:0;
+  font-size:1.26rem;   /* +20% */
+  line-height:1.6;
+  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+}
+
+/* ✅ um único rodapé (Voltar/Pular/Próximo/Concluir), fixo embaixo da caixa
+   — não mais um por etapa, então não pula de lugar ao trocar de etapa. */
+.footer-actions{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:14px;
+  padding-top:12px;
+  border-top:1px solid var(--border);
+}
+.footer-actions .left,
+.footer-actions .right{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+
+/* ✅ Compacta grupos só nesta tela */
+.welcome-sheet .group{
+  padding:14px;
+  margin-top:14px;
+}
+.welcome-sheet label{ margin-bottom:5px; }
+.welcome-sheet input[type=text]{
+  padding:9px 11px;
+}
+/* mantém o respiro à direita pra seta própria do select (base.html) */
+.welcome-sheet select{
+  padding:9px 34px 9px 11px;
+}
+
+/* ===== Logo UI ===== */
+:root{ --logo-size: 240px; }
+@media (max-width: 720px){ :root{ --logo-size: 200px; } }
+@media (max-width: 420px){ :root{ --logo-size: 170px; } }
+
+@media (max-height: 760px){
+  .welcome-scroll{ padding:12px; }
+  .wizard-title{ font-size:1.73rem; }
+  .welcome-sheet .group{ padding:12px; margin-top:12px; }
+}
+@media (max-height: 680px){
+  :root{ --logo-size: 200px; }
+  .wizard-title{ font-size:1.63rem; }
+  .stepper{ margin-top:8px; padding-bottom:8px; }
+  .footer-actions{ margin-top:8px; padding-top:8px; }
+  .intro-title{ font-size:1.5rem; }   /* +20% */
+}
+@media (max-height: 500px){
+  :root{ --logo-size: 150px; }
+  .welcome-scroll{ padding:8px; }
+  .wizard-title{ font-size:1.44rem; }
+  .stepper{ margin-top:6px; padding-bottom:6px; margin-bottom:8px; }
+  .welcome-sheet .group{ padding:8px; margin-top:8px; }
+  .intro-title{ font-size:1.42rem; margin-bottom:6px; }   /* +20% */
+  .intro-lead{ font-size:1.2rem; line-height:1.5; }       /* +20% */
+}
+
+/* .logo-area/.logo-flex/.logo-wrap/.logo-figure/.logo-img/.logo-drop/
+   .logo-drop-icon/.logo-corner-btn/.file-hidden vêm de base.html (evita
+   duplicação com business.html). Só a escala (--logo-size, acima) é
+   específica deste wizard. */
+
+
+/* @media 720px .grid vem de base.html (evita duplicação) */
+
+/* ===== Acessibilidade ===== */
+@media (prefers-reduced-motion: reduce){
+  *{ scroll-behavior:auto !important; }
+}
+</style>
+
+<script>
+/* Fundo (iframe do base.html) já abre em Sales */
+(function(){
+  try{
+    sessionStorage.setItem('main_url', "{{ url_for('list_sales') }}");
+    sessionStorage.setItem('prev_scroll_y', '0');
+    sessionStorage.removeItem('keep_scroll');
+    sessionStorage.removeItem('force_scroll_top');
+  }catch(e){}
+})();
+</script>
+{% endblock %}
+
+{% block content %}
+<section class="container welcome-sheet">
+  <div class="welcome-scroll">
+    <div class="wizard-head">
+      <div>
+        <h1 class="wizard-title">{{ _('Welcome') }}</h1>
+        <p class="wizard-sub">{{ _('Set up your management to get started.') }}</p>
+      </div>
+    </div>
+
+    <div class="stepper" role="tablist" aria-label="{{ _('Setup steps') }}">
+      <button type="button" class="step active" data-step="intro" role="tab" aria-selected="true" aria-controls="panel-intro">
+        {{ _('Introduction') }}
+      </button>
+      <button type="button" class="step" data-step="prefs" role="tab" aria-selected="false" aria-controls="panel-prefs">
+        {{ _('Preferences') }}
+      </button>
+      <button type="button" class="step" data-step="biz" role="tab" aria-selected="false" aria-controls="panel-biz">
+        {{ _('Business') }}
+      </button>
+    </div>
+
+    <form id="setupForm" method="post" action="{{ url_for('first_setup_save') }}" enctype="multipart/form-data">
+      <!-- hidden values -->
+      <input type="hidden" id="setup_lang" name="lang" value="{{ (current_lang_tag() if current_lang_tag is defined else 'en')|e }}">
+      <input type="hidden" id="setup_theme" name="theme_mode" value="{{ (current_theme_mode() if current_theme_mode is defined else 'auto')|e }}">
+
+      {# compat: mantém o antigo nome #}
+      <input type="hidden" id="setup_dir" name="default_directory" value="{{ (DEFAULT_DIR if DEFAULT_DIR is defined else '')|e }}">
+
+      {# ✅ data_dir: só valor fixo, sem UI (igual comentário original já dizia) #}
+      <input type="hidden" id="setup_data_dir" name="data_dir"
+             value="{{ (SETTINGS.data_dir if SETTINGS is defined else (DATA_DIR if DATA_DIR is defined else DEFAULT_DATA_DIR))|e }}">
+
+      {# explorer_dir segue configurável #}
+      <input type="hidden" id="setup_explorer_dir" name="explorer_dir"
+             value="{{ (SETTINGS.explorer_dir if SETTINGS is defined else (EXPLORER_DIR if EXPLORER_DIR is defined else (DEFAULT_DIR if DEFAULT_DIR is defined else '')))|e }}">
+
+      <input type="hidden" id="logo_dataurl" name="logo_dataurl" value="">
+      <input type="hidden" id="remove_logo" name="remove_logo" value="">
+
+      <!-- ✅ os 3 painéis ficam empilhados na mesma célula (equaliza o
+           tamanho da caixa entre etapas) — ver .panels-stack no CSS -->
+      <div class="panels-stack">
+      <!-- ===== Introdução ===== -->
+      <section class="group panel active" id="panel-intro" role="tabpanel" tabindex="-1">
+        <div class="intro-body">
+          <h2 class="intro-title">{{ _('Simple Sales Management') }}</h2>
+          <p class="intro-lead">{{ _('Keeps clients and sales in one place, with quick search and receipts that already carry your business name and logo. Works in Portuguese, English, and Spanish, with a light or dark theme, and keeps everything stored locally on your computer.') }}</p>
+        </div>
+      </section>
+
+      <!-- ===== Preferências (+ Diretório) ===== -->
+      <section class="group panel" id="panel-prefs" role="tabpanel" tabindex="-1">
+        <div class="grid">
+          <div class="field">
+            <label for="langSelect">{{ _('Language') }}</label>
+            <select id="langSelect" name="lang_select">
+              <option value="en">English</option>
+              <option value="pt_BR">Português (Brasil)</option>
+              <option value="es">Español</option>
+            </select>
+          </div>
+
+          {# ✅ mesmo <select> do Settings — nada de widget próprio (pills/dots) #}
+          <div class="field">
+            <label for="themeSelect">{{ _('Theme') }}</label>
+            <select id="themeSelect" name="theme_select">
+              {% for val, label in THEME_CHOICES if val != 'auto' %}
+                <option value="{{ val }}">{{ _(label) }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          {# ✅ mesmo padrão do Settings: input readonly + .secondary (Open/Choose…) —
+             sem "Data directory" aqui (fica só como valor fixo, ver hidden acima) #}
+          <div class="field" style="grid-column:1/-1">
+            <label for="explorerDirInput">{{ _('Explorer directory') }}</label>
+            <div class="dir-row">
+              <input id="explorerDirInput" type="text" placeholder="{{ _('Choose a folder…') }}"
+                     value="{{ (SETTINGS.explorer_dir if SETTINGS is defined else (EXPLORER_DIR if EXPLORER_DIR is defined else (DEFAULT_DIR if DEFAULT_DIR is defined else '')))|e }}"
+                     readonly>
+              <button type="button" class="secondary" id="btnOpenExplorerDir">{{ _('Open') }}</button>
+              <button type="button" class="secondary" id="btnPickExplorerDir">{{ _('Choose…') }}</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== Negócio ===== -->
+      <section class="group panel" id="panel-biz" role="tabpanel" tabindex="-1">
+        <div class="field" style="margin-bottom:10px">
+          <label>{{ _('Logo') }}</label>
+          <div class="logo-area">
+            <div class="logo-flex">
+              <div class="logo-wrap">
+                <figure id="logoFigure" class="logo-figure" style="display:none">
+                  <img id="logoPreview" class="logo-img" alt="{{ _('Logo') }}">
+                </figure>
+
+                <div id="logoDrop" class="logo-drop">
+                  <svg class="logo-drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                    <polyline points="21 15 16 10 5 21"></polyline>
+                  </svg>
+                </div>
+
+                <button type="button" id="btnInsertLogo" class="logo-corner-btn" aria-label="{{ _('Add') }}" title="{{ _('Add') }}">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                  <span>{{ _('Add') }}</span>
+                </button>
+
+                <button type="button" id="btnClearLogo" class="logo-corner-btn" aria-label="{{ _('Remove image') }}" title="{{ _('Remove image') }}" style="display:none">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M18 6 6 18"></path>
+                    <path d="M6 6l12 12"></path>
+                  </svg>
+                  <span>{{ _('Remove') }}</span>
+                </button>
+                <input id="logoFile" type="file" accept="image/*" hidden>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="field">
+            <label for="biz_name">{{ _('Name') }}</label>
+            <input id="biz_name" name="name" type="text" value="{{ BUSINESS.name if BUSINESS is defined else '' }}" placeholder="{{ _('ACME Co.') }}">
+          </div>
+
+          <div class="field">
+            <label for="biz_phone">{{ _('Phone') }}</label>
+            <input id="biz_phone" name="phone" type="text" value="{{ BUSINESS.phone if BUSINESS is defined else '' }}" placeholder="{{ _('(00) 0000-0000') }}">
+          </div>
+
+          <div class="field">
+            <label for="biz_addr1">{{ _('Address') }}</label>
+            <input id="biz_addr1" name="addr1" type="text" value="{{ BUSINESS.addr1 if BUSINESS is defined else '' }}" placeholder="{{ _('123 Main St') }}">
+          </div>
+
+          <div class="field">
+            <label for="biz_tax">{{ _('Tax ID') }}</label>
+            <input id="biz_tax" name="tax_id" type="text" value="{{ BUSINESS.tax_id if BUSINESS is defined else '' }}" placeholder="{{ _('000000000') }}">
+          </div>
+        </div>
+      </section>
+      </div><!-- /.panels-stack -->
+
+      <!-- ✅ rodapé único (não muda de lugar ao trocar de etapa); os
+           botões certos pra cada etapa são mostrados/escondidos via JS -->
+      <div class="footer-actions">
+        <div class="left">
+          <button type="button" class="secondary" id="btnBack" style="display:none">{{ _('Back') }}</button>
+          <button type="button" class="secondary" id="btnSkip" style="display:none">{{ _('Skip') }}</button>
+        </div>
+        <div class="right">
+          <button type="button" class="primary" id="btnNext">{{ _('Next') }}</button>
+          <button type="submit" class="primary" id="btnFinish" style="display:none">{{ _('Finish') }}</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</section>
+
+<script>
+(function(){
+
+// ===== Safety: garante que as classes de fade de navegação não fiquem presas =====
+(function(){
+  function releaseNavFade(){
+    try{
+      var html=document.documentElement;
+      html.classList.remove('nav-in','nav-leave');
+      try{ sessionStorage.removeItem('nav_fade'); }catch(e){}
+    }catch(e){}
+  }
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded', releaseNavFade, {once:true});
+  }else{
+    releaseNavFade();
+  }
+  // fallback: se alguma animação/reload reativar, solta novamente
+  setTimeout(releaseNavFade, 900);
+  setTimeout(releaseNavFade, 1800);
+})();
+  function $(s, r){
+    try{ return (r || document).querySelector(s); }catch(e){ return null; }
+  }
+  function $all(s, r){
+    try{ return Array.prototype.slice.call((r || document).querySelectorAll(s)); }catch(e){ return []; }
+  }
+
+  // ===== Theme helpers (no 'Auto' option) =====
+  function __systemTheme(){
+    try{
+      return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+    }catch(e){ return 'light'; }
+  }
+  function __coerceTheme(v){
+    var m = String(v||'').trim().toLowerCase();
+    if(m === 'dark' || m === 'light') return m;
+    return __systemTheme();
+  }
+
+  
+/* ===== Integração Desktop: __desktopApi() vem de app-common.js (evita duplicação) ===== */
+
+async function __applyThemeDesktop(mode){
+  try{
+    var api = __desktopApi();
+    if(api && typeof api.apply_theme_mode === 'function'){
+      await api.apply_theme_mode(String(__coerceTheme(mode||'')), null);
+      return true;
+    }
+  }catch(e){ console.error(e); }
+  return false;
+}
+
+async function __applyLangDesktop(tag){
+  try{
+    var api = __desktopApi();
+    if(api && typeof api.apply_language === 'function'){
+      await api.apply_language(String(tag||'en'));
+      return true;
+    }
+  }catch(e){ console.error(e); }
+  return false;
+}
+
+async function __applyExplorerDirDesktop(dir){
+  try{
+    var api = __desktopApi();
+    if(api && typeof api.set_explorer_dir === 'function'){
+      await api.set_explorer_dir(String(dir||''));
+      return true;
+    }
+  }catch(e){ console.error(e); }
+  return false;
+}
+
+async function __openDirectoryDesktop(path){
+  try{
+    var api = __desktopApi();
+    if(api && typeof api.open_directory === 'function'){
+      return await api.open_directory(String(path||''));
+    }
+  }catch(e){ console.error(e); }
+  return false;
+}
+
+async function __chooseDirectoryDesktop(cur){
+  try{
+    var api = __desktopApi();
+    if(api && typeof api.choose_directory === 'function'){
+      return await api.choose_directory(String(cur||''));
+    }
+  }catch(e){ console.error(e); }
+  return null;
+}
+
+/* ===== Auto-save (igual settings.html) ===== */
+var __welcomeSaveTimer = null;
+var __welcomeInflight = null;
+var __welcomeRestoring = false;
+
+function __collectSettingsPayload(){
+  var payload = {};
+  try{ payload.preferred_locale = (document.getElementById('setup_lang')?.value) || (document.getElementById('langSelect')?.value) || 'en'; }catch(e){ payload.preferred_locale='en'; }
+  try{ payload.theme_mode = __coerceTheme((document.getElementById('setup_theme')?.value) || document.documentElement.dataset.theme || ''); }catch(e){ payload.theme_mode = __coerceTheme(''); }
+  try{ payload.data_dir = (document.getElementById('setup_data_dir')?.value) || ''; }catch(e){ payload.data_dir=''; }
+  try{ payload.explorer_dir = (document.getElementById('setup_explorer_dir')?.value) || (document.getElementById('explorerDirInput')?.value) || ''; }catch(e){ payload.explorer_dir=''; }
+  return payload;
+}
+
+async function __saveSettingsNow(reason){
+  if(__welcomeRestoring) return;
+  var payload = __collectSettingsPayload();
+  var fd = new FormData();
+  fd.append('preferred_locale', payload.preferred_locale || 'en');
+  fd.append('theme_mode', payload.theme_mode || __coerceTheme(''));
+  fd.append('data_dir', payload.data_dir || '');
+  fd.append('explorer_dir', payload.explorer_dir || '');
+
+  try{
+    if(__welcomeInflight){ try{ await __welcomeInflight; }catch(_e){} }
+
+    __welcomeInflight = fetch('/settings/save', { method:'POST', body: fd, credentials:'same-origin' })
+      .catch(function(e){ console.error(e); })
+      .finally(function(){ __welcomeInflight=null; });
+
+    await __welcomeInflight;
+  }catch(e){ console.error(e); }
+
+  try{
+    if(reason === 'theme'){
+      await __applyThemeDesktop(payload.theme_mode || __coerceTheme(''));
+    }else if(reason === 'explorer'){
+      await __applyExplorerDirDesktop(payload.explorer_dir || '');
+    }else if(reason === 'lang'){
+      await __applyLangDesktop(payload.preferred_locale || 'en');
+    }
+  }catch(e){ console.error(e); }
+}
+
+function __debounceSave(reason){
+  if(__welcomeRestoring) return;
+  if(__welcomeSaveTimer) clearTimeout(__welcomeSaveTimer);
+  __welcomeSaveTimer = setTimeout(function(){ __saveSettingsNow(reason || 'other'); }, 420);
+}
+
+/* ===== Snapshot (para reverter no 'Skip') ===== */
+  var SNAP_KEY = 'ssm_welcome_snapshot_v1';
+
+
+var SNAP_SERVER_KEY = 'ssm_welcome_snapshot_server_v1';
+
+function snapshotServerIfMissing(){
+  try{ if(sessionStorage.getItem(SNAP_SERVER_KEY)) return; }catch(_e){}
+  try{
+    fetch('/api/settings', {credentials:'same-origin'})
+      .then(function(r){ return r.json().catch(function(){ return null; }); })
+      .then(function(j){
+        if(!j || !j.ok || !j.data) return;
+        var d = j.data || {};
+        var snap = {
+          preferred_locale: String(d.preferred_locale || d.lang || 'en'),
+          theme_mode: __coerceTheme(d.theme_mode || ''),
+          data_dir: String(d.data_dir || ''),
+          explorer_dir: String(d.explorer_dir || '')
+        };
+        try{ sessionStorage.setItem(SNAP_SERVER_KEY, JSON.stringify(snap)); }catch(_e2){}
+      })
+      .catch(function(){});
+  }catch(_e){}
+}
+
+function readServerSnap(){
+  try{
+    var s = sessionStorage.getItem(SNAP_SERVER_KEY);
+    if(!s) return null;
+    return JSON.parse(s);
+  }catch(e){ return null; }
+}
+
+function clearServerSnap(){
+  try{ sessionStorage.removeItem(SNAP_SERVER_KEY); }catch(e){}
+}
+
+  function _safeGetLS(key){
+    try{ return localStorage.getItem(key); }catch(e){ return null; }
+  }
+  function _safeSetLS(key, val){
+    try{
+      if(val === null || val === undefined) localStorage.removeItem(key);
+      else localStorage.setItem(key, String(val));
+    }catch(e){}
+  }
+  function _getCurrentLang(){
+    var v = _safeGetLS('preferred_locale') || _safeGetLS('lang') || '';
+    if(!v){
+      try{ v = document.documentElement.getAttribute('lang') || ''; }catch(e){}
+    }
+    return (v || 'en');
+  }
+  function snapshotIfMissing(){
+    try{
+      if(sessionStorage.getItem(SNAP_KEY)) return;
+
+      var snap = {
+        theme_mode: (function(){
+          try{ return __coerceTheme(document.documentElement.dataset.theme || _safeGetLS('theme_mode') || ''); }catch(e){ return __coerceTheme(_safeGetLS('theme_mode') || ''); }
+        })(),
+        lang: _getCurrentLang(),
+        explorer_dir: (_safeGetLS('explorer_dir') || _safeGetLS('default_directory') || ''),
+        data_dir: (_safeGetLS('data_dir') || '')
+      };
+
+      sessionStorage.setItem(SNAP_KEY, JSON.stringify(snap));
+    }catch(e){}
+  }
+  function readSnap(){
+    try{
+      var s = sessionStorage.getItem(SNAP_KEY);
+      if(!s) return null;
+      return JSON.parse(s);
+    }catch(e){ return null; }
+  }
+  function clearSnap(){
+    try{ sessionStorage.removeItem(SNAP_KEY); }catch(e){}
+  }
+
+  // salva o estado ANTES de qualquer alteração ao vivo (inclusive data_dir)
+  snapshotIfMissing();
+  snapshotServerIfMissing();
+
+  /* ✅ data_dir fixo (sem UI) */
+  var DEFAULT_DATA_DIR = "{{ DEFAULT_DATA_DIR|e }}";
+  /* ✅ diretório padrão do Explorer (fallback quando não há valor salvo ainda) */
+  var DEFAULT_EXPLORER_DIR = "{{ (EXPLORER_DIR if EXPLORER_DIR is defined else (DEFAULT_DIR if DEFAULT_DIR is defined else ''))|e }}";
+
+  /* ===== Etapas (stepper) ===== */
+  var STEP_ORDER = ['intro','prefs','biz'];
+  var steps = $all('.step');
+  var panels = {
+    intro: $('#panel-intro'),
+    prefs: $('#panel-prefs'),
+    biz: $('#panel-biz')
+  };
+
+  /* ✅ rodapé único: mostra só os botões certos pra etapa atual
+     (Voltar some na 1ª, Pular/Concluir só aparecem na última) */
+  var btnBack = $('#btnBack');
+  var btnSkip = $('#btnSkip');
+  var btnNext = $('#btnNext');
+  var btnFinish = $('#btnFinish');
+
+  function updateFooterButtons(key){
+    var idx = STEP_ORDER.indexOf(key);
+    var isFirst = (idx <= 0);
+    var isLast = (idx === STEP_ORDER.length - 1);
+    if(btnBack) btnBack.style.display = isFirst ? 'none' : '';
+    if(btnSkip) btnSkip.style.display = isLast ? '' : 'none';
+    if(btnNext) btnNext.style.display = isLast ? 'none' : '';
+    if(btnFinish) btnFinish.style.display = isLast ? '' : 'none';
+  }
+
+  function showStep(key){
+    for(var i=0;i<steps.length;i++){
+      var b = steps[i];
+      var on = (b.getAttribute('data-step') === key);
+      if(on) b.classList.add('active'); else b.classList.remove('active');
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    }
+    for(var k in panels){
+      if(!panels.hasOwnProperty(k)) continue;
+      var el = panels[k];
+      if(!el) continue;
+      if(k === key) el.classList.add('active'); else el.classList.remove('active');
+    }
+    updateFooterButtons(key);
+  }
+
+  for(var i=0;i<steps.length;i++){
+    (function(btn){
+      btn.addEventListener('click', function(){
+        showStep(btn.getAttribute('data-step'));
+      });
+    })(steps[i]);
+  }
+
+  function currentStepIndex(){
+    for(var i=0;i<STEP_ORDER.length;i++){
+      var p = panels[STEP_ORDER[i]];
+      if(p && p.classList.contains('active')) return i;
+    }
+    return 0;
+  }
+
+  if(btnNext) btnNext.addEventListener('click', function(){
+    var idx = currentStepIndex();
+    if(idx < STEP_ORDER.length - 1) showStep(STEP_ORDER[idx + 1]);
+  });
+  if(btnBack) btnBack.addEventListener('click', function(){
+    var idx = currentStepIndex();
+    if(idx > 0) showStep(STEP_ORDER[idx - 1]);
+  });
+
+  updateFooterButtons(STEP_ORDER[currentStepIndex()]);
+
+  /* ✅ Trocar o idioma em Preferências recarrega a página (o servidor
+     re-renderiza tudo no novo idioma). Sem isto o wizard voltava sempre
+     pra Introdução — aqui restauramos a etapa salva antes do reload. */
+  try{
+    var __savedStep = sessionStorage.getItem('ssm_welcome_step');
+    if(__savedStep){
+      sessionStorage.removeItem('ssm_welcome_step');
+      if(STEP_ORDER.indexOf(__savedStep) >= 0) showStep(__savedStep);
+    }
+  }catch(e){}
+
+  /* ===== Language ===== */
+  var langSel = $('#langSelect');
+  var hLang   = $('#setup_lang');
+
+  try{
+    var storedRaw = ((localStorage.getItem('preferred_locale') || localStorage.getItem('lang') || '') + '').trim();
+
+// No 'Auto' option: if a legacy value is present, ignore it.
+if(storedRaw && storedRaw.toLowerCase() === 'auto') storedRaw = '';
+
+// Effective language as rendered by the server (/i18n/set seed, cookie, etc.)
+var docRaw = ((document.documentElement.getAttribute('lang') || '') + '').trim();
+
+function normLang(raw){
+  var cur = ((raw || '') + '').trim();
+  if(!cur) return '';
+  cur = cur.replace('-', '_').slice(0,5);
+  if(cur.toLowerCase().indexOf('pt')===0) cur = 'pt_BR';
+  else cur = cur.slice(0,2).toLowerCase();
+  return (cur && ['en','pt_BR','es'].indexOf(cur) >= 0) ? cur : '';
+}
+
+var stored = normLang(storedRaw);
+var docLang = normLang(docRaw);
+
+// ✅ Prefer the language actually used by the page (docLang) when available.
+// This fixes the case where the installer seed forces a lang via cookie,
+// but localStorage still contains a previous value (e.g., 'en').
+var cur = docLang || stored || 'en';
+
+if(langSel){
+  langSel.value = cur;
+  if(hLang) hLang.value = cur;
+
+  // ✅ Keep localStorage consistent with the rendered language.
+  if(docLang && docLang !== stored){
+    try{ localStorage.setItem('preferred_locale', docLang); }catch(e){}
+    try{ localStorage.setItem('lang', docLang); }catch(e){}
+  }
+}
+  }catch(e){
+    try{ if(langSel) langSel.value='en'; if(hLang) hLang.value='en'; }catch(_){}
+  }
+
+  if(langSel){
+    langSel.addEventListener('change', function(){
+      var v = (langSel.value || 'en');
+      if(hLang) hLang.value = v;
+      try{ localStorage.setItem('preferred_locale', v); }catch(e){}
+      try{ localStorage.setItem('lang', v); }catch(e){}
+
+      // ✅ guarda a etapa atual pra restaurá-la após o reload do idioma
+      try{ sessionStorage.setItem('ssm_welcome_step', STEP_ORDER[currentStepIndex()]); }catch(e){}
+
+      // salva no servidor + aplica imediatamente (igual Settings)
+      try{ __saveSettingsNow('lang'); }catch(e){}
+
+      // aplica imediatamente (igual Settings)
+      try{
+        var next = (location.pathname || '/') + (location.search || '') + (location.hash || '');
+        // No desktop, o main process só sincroniza o título da janela — não
+        // navega mais por conta própria. O cookie `lang` + reload são feitos
+        // aqui, pelo mesmo caminho no Electron e no browser.
+        try{
+          if(window.ssm && typeof window.ssm.applyLanguage === 'function'){
+            window.ssm.applyLanguage(v);
+          }
+        }catch(e){}
+        location.assign('/i18n/set?lang=' + encodeURIComponent(v) + '&next=' + encodeURIComponent(next));
+      }catch(e){}
+    });
+  }
+
+  /* ===== Theme — mesmo <select> do Settings (sem pills/dots próprios) ===== */
+  var hTheme = $('#setup_theme');
+  var themeSel = $('#themeSelect');
+
+  function setThemeUI(mode){
+    if(themeSel) themeSel.value = mode;
+    if(hTheme) hTheme.value = mode;
+  }
+
+  (function initTheme(){
+    var raw = '';
+    try{ raw = (document.documentElement.dataset.theme || localStorage.getItem('theme_mode') || ''); }catch(e){}
+    var mode = __coerceTheme(raw);
+    setThemeUI(mode);
+
+    // If legacy value was 'auto' (or empty), immediately persist a concrete mode.
+    try{
+      if(!raw || String(raw).toLowerCase() === 'auto'){
+        localStorage.setItem('theme_mode', mode);
+        document.documentElement.dataset.theme = mode;
+        try{ __saveSettingsNow('theme'); }catch(e){}
+        try{ __applyThemeDesktop(mode); }catch(e){}
+      }
+    }catch(e){}
+  })();
+
+  if(themeSel){
+    themeSel.addEventListener('change', function(){
+      var mode = __coerceTheme(themeSel.value);
+      setThemeUI(mode);
+      try{
+        if(window.__setThemeMode) window.__setThemeMode(mode);
+        else{
+          try{ localStorage.setItem('theme_mode', mode); }catch(e){}
+          document.documentElement.dataset.theme = mode;
+        }
+      }catch(e){}
+
+      // salva no servidor + aplica tema nativo (janela) — igual settings.html
+      try{ __saveSettingsNow('theme'); }catch(e){}
+      try{ __applyThemeDesktop(mode); }catch(e){}
+    });
+  }
+
+  /* ===== pywebview readiness ===== */
+  var pyReady = false;
+  function markReady(){ pyReady = true; }
+  try{
+    if(window.pywebview && window.pywebview.api) pyReady = true;
+  }catch(e){}
+  document.addEventListener('pywebviewready', function(){ markReady(); });
+
+  
+/* ===== Directories — mesmo padrão do Settings: só explorer_dir tem UI
+   (data_dir fica fixo no hidden #setup_data_dir, sem campo/botões aqui) ===== */
+var explorerDirInput = $('#explorerDirInput');
+
+var hDataDir = $('#setup_data_dir');
+var hExplorerDir = $('#setup_explorer_dir');
+var hCompatDefault = $('#setup_dir'); /* compat antigo default_directory */
+
+function norm(v){
+  return String(v || '').replace(/\s+$/,'').replace(/^\s+/, '');
+}
+
+(function initDataDir(){
+  var val = norm((hDataDir && hDataDir.value) ? hDataDir.value : (DEFAULT_DATA_DIR || ''));
+  if(hDataDir) hDataDir.value = val;
+  try{ localStorage.setItem('data_dir', val); }catch(e){}
+})();
+
+function setExplorerDir(v, doSave){
+  var val = norm(v);
+  if(explorerDirInput) explorerDirInput.value = val;
+  if(hExplorerDir) hExplorerDir.value = val;
+  if(hCompatDefault) hCompatDefault.value = val;
+  try{ localStorage.setItem('explorer_dir', val); }catch(e){}
+  try{ localStorage.setItem('default_directory', val); }catch(e){}
+  if(doSave !== false){
+    __debounceSave('explorer');
+    __applyExplorerDirDesktop(val);
+  }
+}
+
+(function initDirs(){
+  var initExp = '';
+  try{ initExp = (hExplorerDir && hExplorerDir.value) ? hExplorerDir.value : ''; }catch(e){}
+  if(!initExp){
+    try{ initExp = localStorage.getItem('explorer_dir') || localStorage.getItem('default_directory') || ''; }catch(e){}
+  }
+  if(!initExp) initExp = DEFAULT_EXPLORER_DIR || '';
+  setExplorerDir(initExp, false);
+
+  __applyExplorerDirDesktop(initExp);
+})();
+
+/* ===== Botões: Explorer directory ===== */
+var btnOpenExplorerDir = $('#btnOpenExplorerDir');
+if(btnOpenExplorerDir){
+  btnOpenExplorerDir.addEventListener('click', async function(){
+    var p = norm((explorerDirInput && explorerDirInput.value) ? explorerDirInput.value : '');
+    if(!p){ alert('{{ _("Enter a valid directory.") }}'); return; }
+    var ok = await __openDirectoryDesktop(p);
+    if(!ok) alert('{{ _("Could not open in Explorer.") }}');
+  });
+}
+
+var btnPickExplorerDir = $('#btnPickExplorerDir');
+if(btnPickExplorerDir){
+  btnPickExplorerDir.addEventListener('click', async function(){
+    var cur = norm((explorerDirInput && explorerDirInput.value) ? explorerDirInput.value : '');
+    var chosen = await __chooseDirectoryDesktop(cur);
+    if(chosen){
+      setExplorerDir(chosen, false);
+      await __saveSettingsNow('explorer');
+    }else{
+      alert('{{ _("Folder selection is only available in the desktop app.") }}');
+    }
+  });
+}
+
+
+/* ===== Logo (dataurl) ===== */
+  var logoFile = $('#logoFile');
+  var btnInsertLogo = $('#btnInsertLogo');
+  var logoFigure = $('#logoFigure');
+  var logoDrop = $('#logoDrop');
+  var logoPreview = $('#logoPreview');
+  var btnClearLogo = $('#btnClearLogo');
+  var hLogo = $('#logo_dataurl');
+  var hRem  = $('#remove_logo');
+
+  function showLogo(dataUrl){
+    if(logoPreview) logoPreview.src = dataUrl || '';
+    if(logoFigure) logoFigure.style.display = dataUrl ? '' : 'none';
+    if(logoDrop) logoDrop.style.display = dataUrl ? 'none' : '';
+    if(btnInsertLogo) btnInsertLogo.style.display = dataUrl ? 'none' : '';
+    if(btnClearLogo) btnClearLogo.style.display = dataUrl ? '' : 'none';
+    if(hLogo) hLogo.value = dataUrl || '';
+    if(hRem) hRem.value = dataUrl ? '' : '1';
+  }
+
+  if(btnInsertLogo){
+    btnInsertLogo.addEventListener('click', function(){
+      try{ if(logoFile) logoFile.value = ''; }catch(e){}
+      if(logoFile) logoFile.click();
+    });
+  }
+
+  if(logoFile){
+    logoFile.addEventListener('change', function(){
+      var f = (logoFile.files && logoFile.files[0]) ? logoFile.files[0] : null;
+      if(!f) return;
+      var r = new FileReader();
+      r.onload = function(){ showLogo(String(r.result || '')); };
+      r.readAsDataURL(f);
+    });
+  }
+
+  if(btnClearLogo){
+    btnClearLogo.addEventListener('click', function(){
+      showLogo('');
+      try{ if(logoFile) logoFile.value = ''; }catch(e){}
+    });
+  }
+
+
+/* ===== Skip ===== */
+if(btnSkip){
+  btnSkip.addEventListener('click', async function(){
+    var snapLocal = null;
+    var snapServer = null;
+
+    try{ snapLocal = readSnap(); }catch(e){}
+    try{ snapServer = readServerSnap(); }catch(e){}
+
+    // base da reversão: preferir snapshot do servidor (é o "antes" real)
+    var base = snapServer || (snapLocal ? {
+      preferred_locale: snapLocal.lang || 'en',
+      theme_mode: __coerceTheme(snapLocal.theme_mode || ''),
+      data_dir: snapLocal.data_dir || '',
+      explorer_dir: snapLocal.explorer_dir || ''
+    } : null) || {
+      preferred_locale: _getCurrentLang() || 'en',
+      theme_mode: __coerceTheme(document.documentElement.dataset.theme || ''),
+      data_dir: '',
+      explorer_dir: ''
+    };
+
+    // trava auto-save durante a restauração
+    __welcomeRestoring = true;
+
+    try{
+      // restaura theme
+      var tm = __coerceTheme(base.theme_mode || '');
+      _safeSetLS('theme_mode', tm);
+      try{ if(window.__setThemeMode) window.__setThemeMode(tm); else document.documentElement.dataset.theme = tm; }catch(e){}
+      try{ if(hTheme) hTheme.value = tm; }catch(e){}
+      try{ await __applyThemeDesktop(tm); }catch(e){}
+
+      // restaura lang (localStorage) — cookie via /i18n/set no redirect
+      var lg = (base.preferred_locale || 'en');
+      _safeSetLS('preferred_locale', lg);
+      _safeSetLS('lang', lg);
+      try{ if(hLang) hLang.value = lg; }catch(e){}
+      try{ if(langSel) langSel.value = lg; }catch(e){}
+
+      // restaura dirs
+      var dd = (base.data_dir || '');
+      if(dd){ _safeSetLS('data_dir', dd); } else { try{ localStorage.removeItem('data_dir'); }catch(e){} }
+      try{ if(hDataDir) hDataDir.value = dd; }catch(e){}
+
+      var ed = (base.explorer_dir || '');
+      _safeSetLS('explorer_dir', ed);
+      _safeSetLS('default_directory', ed);
+      try{ if(hExplorerDir) hExplorerDir.value = ed; }catch(e){}
+      try{ if(explorerDirInput) explorerDirInput.value = ed; }catch(e){}
+      try{ if(hCompatDefault) hCompatDefault.value = ed; }catch(e){}
+      try{ await __applyExplorerDirDesktop(ed); }catch(e){}
+    }catch(e){}
+
+    // reverte no servidor (Settings) para não "vazar" a alteração ao vivo
+    try{
+      var fd = new FormData();
+      fd.append('preferred_locale', base.preferred_locale || 'en');
+      fd.append('theme_mode', __coerceTheme(base.theme_mode || ''));
+      fd.append('data_dir', base.data_dir || '');
+      fd.append('explorer_dir', base.explorer_dir || '');
+      await fetch('/settings/save', {method:'POST', body: fd, credentials:'same-origin'}).catch(function(){});
+    }catch(e){}
+
+    // limpa snapshots
+    try{ clearSnap(); }catch(e){}
+    try{ clearServerSnap(); }catch(e){}
+
+    __welcomeRestoring = false;
+
+    // garante próxima tela no idioma restaurado
+    try{
+      var next = "{{ url_for('list_sales') }}";
+      var lg2 = (base.preferred_locale || 'en');
+      location.assign('/i18n/set?lang=' + encodeURIComponent(lg2) + '&next=' + encodeURIComponent(next));
+      return;
+    }catch(e){}
+
+    location.assign("{{ url_for('list_sales') }}");
+  });
+}
+
+
+    /* ===== Submit sync ===== */
+  var form = $('#setupForm');
+  if(form){
+    form.addEventListener('submit', function(){
+      try{ clearSnap(); }catch(e){}
+      try{ if(hLang) hLang.value = (langSel && langSel.value ? langSel.value : 'en'); }catch(e){}
+      try{
+        var t = __coerceTheme((hTheme && hTheme.value) ? hTheme.value : (document.documentElement.dataset.theme || ''));
+        if(hTheme) hTheme.value = t;
+      }catch(e){}
+      try{ if(hDataDir && !hDataDir.value) hDataDir.value = (DEFAULT_DATA_DIR || ''); }catch(e){}
+      try{
+        var ev = (explorerDirInput && explorerDirInput.value) ? norm(explorerDirInput.value) : '';
+        if(hExplorerDir) hExplorerDir.value = ev;
+        if(hCompatDefault) hCompatDefault.value = ev;
+      }catch(e){}
+    });
+  }
+})();
+</script>
+{% endblock %}

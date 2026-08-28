@@ -1,0 +1,468 @@
+<style>
+/* ✅ .sidebar/.app: removido código morto — nesta página (_show_chrome=false)
+   a sidebar nunca é renderizada e .popup-host .app (base.html) já zera o
+   padding com especificidade maior, então esse bloco não tinha efeito. */
+
+/* ✅ Logo no topo (largura toda) e os 4 campos restantes (Nome, Telefone,
+   Endereço, Tax ID) em 2×2 abaixo dele, tudo centralizado no meio — mesma
+   disposição da etapa Negócio do Welcome. CEP e Endereço 2 foram removidos. */
+.logo-field{ align-items:center; text-align:center; }
+.logo-field .logo-flex{ justify-content:center; }
+.biz-grid{
+  grid-template-columns:1fr 1fr;
+  max-width:min(480px, 100%);
+  margin-inline:auto;
+  gap:14px;
+}
+@media (max-width:560px){ .biz-grid{ grid-template-columns:1fr; } }
+
+/* ===== Overlay (popup) — sem animação de slide, surge no centro ===== */
+@keyframes backdropFadeIn{
+  from{ background: rgba(0,0,0,0); }
+  to  { background: rgba(0,0,0,.40); }
+}
+@keyframes backdropFadeOut{
+  from{ background: rgba(0,0,0,.40); }
+  to  { background: rgba(0,0,0,0); }
+}
+@keyframes sheetEnter{
+  from{ opacity:0; }
+  to  { opacity:1; }
+}
+@keyframes sheetExit{
+  from{ opacity:1; }
+  to  { opacity:0; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .popup-backdrop, .popup-sheet{
+    animation:none !important;
+    opacity:1;
+    transform:none !important;
+  }
+}
+
+/* ===== Backdrop / folha — .popup-backdrop e .popup-sheet (caixa, posição,
+   cor, z-index) vêm de base.html. Aqui só o padding do backdrop, a
+   max-height do sheet e a animação de entrada/saída deste popup. ===== */
+.popup-backdrop{
+  padding:16px;
+  animation: backdropFadeIn 160ms ease-out both;
+}
+.popup-backdrop.leaving{
+  animation: backdropFadeOut 320ms ease-in both;
+}
+.popup-sheet{
+  max-height: calc(100dvh - 32px);
+  animation: sheetEnter 180ms cubic-bezier(.22,.61,.36,1) both;
+}
+.popup-sheet.leaving{
+  animation: sheetExit 320ms cubic-bezier(.4,0,.2,1) both;
+}
+
+/* .popup-header/.popup-title/.popup-close vêm de base.html (evita duplicação) */
+
+/* ===== Body (com scrollbar quando precisar) ===== */
+.popup-body{
+  padding:14px;
+  overflow:auto;                 /* aparece scrollbar só se precisar */
+  -webkit-overflow-scrolling:touch;
+  flex:1 1 auto;
+  min-height:0;                  /* importante pra flex permitir rolagem */
+  /* ✅ REMOVIDO: scrollbar-gutter: stable;  (isso reservava espaço mesmo sem precisar) */
+}
+
+/* ✅ Sobe levemente o grupo (logo + campos): menos respiro entre o
+   cabeçalho e o começo do formulário. */
+#bizBackdrop .popup-body{ padding-top:8px; }
+
+/* ===== Layout do formulário — usa .grid do base.html (2 colunas + colapso
+   em telas estreitas); nada de grade própria. ===== */
+
+/* ====== Logo UI: .logo-area/.logo-flex/.logo-wrap/.logo-figure/.logo-img/
+   .logo-drop/.logo-drop-icon/.logo-corner-btn/.file-hidden vêm de base.html
+   (evita duplicação com welcome.html). --logo-size também vem de base.html;
+   redefina aqui só se esta página precisar de uma escala diferente. */
+
+/* ===== Ajustes para telas “baixas” ===== */
+@media (max-height: 760px){
+  .popup-body{ padding:12px; }
+  .biz-grid{ gap:10px; }
+  .logo-drop{ max-height: 30vh; }
+}
+@media (max-height: 640px){
+  .popup-sheet{ transform: scale(.94); transform-origin: top center; }
+  .logo-drop{ max-height: 28vh; }
+}
+@media (max-height: 560px){
+  .popup-sheet{ transform: scale(.90); transform-origin: top center; }
+  .logo-drop{ max-height: 26vh; }
+}
+
+</style>
+
+<div class="popup-backdrop" role="presentation" id="bizBackdrop">
+  <section class="popup-sheet" role="dialog" aria-modal="true" aria-labelledby="popup-title" id="bizSheet">
+    <header class="popup-header">
+      <h2 id="popup-title" class="popup-title">{{ _('Business') }}</h2>
+      <button type="button" class="popup-close" aria-label="{{ _('Close') }}" onclick="bizClosePopup()"></button>
+    </header>
+
+    <div class="popup-body">
+      <form id="bizForm"
+            method="post"
+            action="{{ url_for('save_business') }}"
+            enctype="multipart/form-data"
+            onsubmit="return bizSaveBusinessAndClose(event)">
+        <div class="grid biz-grid">
+          <!-- Logo -->
+          <div class="field logo-field" style="grid-column:1/-1">
+            <label>{{ _('Logo') }}</label>
+            <div class="logo-area">
+              <div class="logo-flex">
+                <div class="logo-wrap">
+                  <figure id="logoFigure" class="logo-figure" style="{% if not BUSINESS.logo_dataurl %}display:none{% endif %}">
+                    <img id="logoPreview" class="logo-img" alt="{{ _('Logo') }}" {% if BUSINESS.logo_dataurl %} src="{{ BUSINESS.logo_dataurl }}" {% endif %}>
+                  </figure>
+
+                  <div id="logoDrop" class="logo-drop" style="{% if BUSINESS.logo_dataurl %}display:none{% endif %}">
+                    <svg class="logo-drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                      <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                      <polyline points="21 15 16 10 5 21"></polyline>
+                    </svg>
+                  </div>
+
+                  <button type="button" id="btnInsertLogo" class="logo-corner-btn" aria-label="{{ _('Add') }}" title="{{ _('Add') }}"
+                          style="{% if BUSINESS.logo_dataurl %}display:none{% endif %}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    <span>{{ _('Add') }}</span>
+                  </button>
+
+                  <button type="button" id="btnClearLogo" class="logo-corner-btn" aria-label="{{ _('Remove image') }}" title="{{ _('Remove image') }}"
+                          style="{% if not BUSINESS.logo_dataurl %}display:none{% endif %}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M18 6 6 18"></path>
+                      <path d="M6 6l12 12"></path>
+                    </svg>
+                    <span>{{ _('Remove') }}</span>
+                  </button>
+
+                  <input id="logoFile" class="file-hidden" type="file" accept="image/*">
+
+                  <input type="hidden" id="remove_logo" name="remove_logo" value="">
+                  <input type="hidden" id="logo_dataurl" name="logo_dataurl" value="">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Campos -->
+          <div class="field">
+            <label for="name">{{ _('Name') }}</label>
+            <input id="name" name="name" type="text" value="{{ BUSINESS.name or '' }}" placeholder="{{ _('ACME Co.') }}">
+          </div>
+
+          <div class="field">
+            <label for="phone">{{ _('Phone') }}</label>
+            <input id="phone" name="phone" type="text" value="{{ BUSINESS.phone or '' }}" placeholder="{{ _('(00) 0000-0000') }}">
+          </div>
+
+          <div class="field">
+            <label for="addr1">{{ _('Address') }}</label>
+            <input id="addr1" name="addr1" type="text" value="{{ BUSINESS.addr1 or '' }}" placeholder="{{ _('123 Main St') }}">
+          </div>
+
+          <div class="field">
+            <label for="tax_id">{{ _('Tax ID') }}</label>
+            <input id="tax_id" name="tax_id" type="text" value="{{ BUSINESS.tax_id or '' }}" placeholder="{{ _('000000000') }}">
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="bizSaveBtn" type="submit" class="primary icon-text" aria-label="{{ _('Save') }}" title="{{ _('Save') }}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M20 6 9 17l-5-5"></path>
+            </svg>
+            <span>{{ _('Save') }}</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>
+
+<script>
+// ✅ Business pode rodar de dois jeitos: como página cheia (standalone,
+// acessada direto ou pelo Welcome) ou embutida em Vendas/Clientes/Nova
+// Venda (management.html) — nesse 2º caso o popup só esconde/mostra, sem
+// navegar nada, sem iframe, sem nenhum dos problemas de composição que
+// tínhamos com o iframe-overlay.
+function __bizEmbedded(){ return document.body.classList.contains('main-chrome'); }
+
+function bizTargetURL(){
+  try{
+    var target = sessionStorage.getItem('main_url') || '';
+    if (!target) return '{{ url_for("list_sales") }}';
+    var url = new URL(target, location.origin);
+    var pth = url.pathname || '';
+    if (pth.startsWith('/settings') || pth.startsWith('/business')) return '{{ url_for("list_sales") }}';
+    return target;
+  }catch(e){
+    return '{{ url_for("list_sales") }}';
+  }
+}
+
+function openBizPopup(){
+  var backdrop = document.getElementById('bizBackdrop');
+  var sheet    = document.getElementById('bizSheet');
+  if(!backdrop) return;
+  // ✅ desfaz qualquer remoção/troca de logo feita numa visita anterior ao
+  // popup e nunca salva (ver __bizResetUnsavedLogo, definido na IIFE de
+  // upload do logo) — reabrir sempre parte do que está de fato salvo.
+  if(typeof window.__bizResetUnsavedLogo === 'function') window.__bizResetUnsavedLogo();
+  backdrop.classList.remove('leaving');
+  if (sheet) sheet.classList.remove('leaving');
+  backdrop.style.pointerEvents = '';
+  backdrop.hidden = false;
+  document.body.classList.add('has-open-dialog');
+  setTimeout(function(){ try{ document.activeElement && document.activeElement.blur(); }catch(e){} }, 0);
+}
+
+function bizClosePopup(){
+  var reduce   = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var backdrop = document.getElementById('bizBackdrop');
+  var sheet    = document.getElementById('bizSheet');
+  var embedded = __bizEmbedded();
+
+  var go = function(){
+    if(embedded){
+      if(backdrop){ backdrop.hidden = true; backdrop.classList.remove('leaving'); backdrop.style.pointerEvents = ''; }
+      if(sheet) sheet.classList.remove('leaving');
+      document.body.classList.remove('has-open-dialog');
+      return;
+    }
+    location.href = bizTargetURL();
+  };
+
+  if (!backdrop || !sheet || reduce){ go(); return; }
+
+  backdrop.style.pointerEvents = 'none';
+  backdrop.classList.add('leaving');
+  sheet.classList.add('leaving');
+
+  var t = setTimeout(go, 420);
+
+  sheet.addEventListener('animationend', function(){
+    clearTimeout(t);
+    go();
+  }, { once:true });
+}
+
+(function(){
+  if(__bizEmbedded()){
+    var backdrop = document.getElementById('bizBackdrop');
+    if(backdrop) backdrop.hidden = true;
+    window.openBizPopup = openBizPopup;
+  }else{
+    document.body.classList.add('has-open-dialog');
+    window.addEventListener('beforeunload', () => document.body.classList.remove('has-open-dialog'));
+    setTimeout(function(){ try{ document.activeElement && document.activeElement.blur(); }catch(e){} }, 0);
+  }
+})();
+
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape'){
+    var bd = document.getElementById('bizBackdrop');
+    if(bd && !bd.hidden) bizClosePopup();
+  }
+});
+
+document.addEventListener('click', function(e){
+  var bd = document.getElementById('bizBackdrop');
+  if (bd && !bd.hidden && e.target === bd) bizClosePopup();
+});
+
+/* ===================== LOGO UPLOAD ===================== */
+(function(){
+  var btnInsert = document.getElementById('btnInsertLogo');
+  var btnClear  = document.getElementById('btnClearLogo');
+  var fileInput = document.getElementById('logoFile');
+
+  var fig   = document.getElementById('logoFigure');
+  var img   = document.getElementById('logoPreview');
+  var drop  = document.getElementById('logoDrop');
+
+  var hidData = document.getElementById('logo_dataurl');
+  var hidRm   = document.getElementById('remove_logo');
+
+  // ✅ valor realmente salvo no servidor — usado para desfazer uma remoção
+  // (ou troca) de logo que o usuário não confirmou: o popup embutido não
+  // recarrega a página ao fechar sem salvar, então sem isso o DOM ficava
+  // "removido" mesmo reabrindo o popup depois (ver openBizPopup abaixo).
+  var ORIGINAL_LOGO_DATAURL = {{ (BUSINESS.logo_dataurl or '')|tojson }};
+  window.__bizResetUnsavedLogo = function(){ showPreview(ORIGINAL_LOGO_DATAURL); };
+
+  function showPreview(dataUrl){
+    if (img) img.src = dataUrl || '';
+    if (hidData) hidData.value = dataUrl || '';
+    if (hidRm) hidRm.value = '';
+
+    if (fig) fig.style.display = dataUrl ? '' : 'none';
+    if (drop) drop.style.display = dataUrl ? 'none' : '';
+    if (btnInsert) btnInsert.style.display = dataUrl ? 'none' : '';
+    if (btnClear) btnClear.style.display = dataUrl ? '' : 'none';
+  }
+
+  function clearLogo(){
+    if (hidData) hidData.value = '';
+    if (hidRm) hidRm.value = '1';
+    if (img) img.removeAttribute('src');
+    if (fileInput) fileInput.value = '';
+    if (fig) fig.style.display = 'none';
+    if (drop) drop.style.display = '';
+    if (btnInsert) btnInsert.style.display = '';
+    if (btnClear) btnClear.style.display = 'none';
+  }
+
+  function readAndResizeToDataURL(file){
+    return new Promise(function(resolve, reject){
+      if (!file) return reject(new Error('No file'));
+      if (!/^image\//i.test(file.type || '')) return reject(new Error('Not an image'));
+
+      var r = new FileReader();
+      r.onerror = function(){ reject(new Error('File read error')); };
+      r.onload = function(){
+        try{
+          var src = String(r.result || '');
+          var maxDim = 1024;
+          var im = new Image();
+          im.onload = function(){
+            try{
+              var w = im.naturalWidth || im.width || 0;
+              var h = im.naturalHeight || im.height || 0;
+              if (!w || !h) return resolve(src);
+
+              var scale = Math.min(1, maxDim / Math.max(w, h));
+              if (scale >= 1) return resolve(src);
+
+              var cw = Math.max(1, Math.round(w * scale));
+              var ch = Math.max(1, Math.round(h * scale));
+              var c = document.createElement('canvas');
+              c.width = cw; c.height = ch;
+              var ctx = c.getContext('2d', { alpha:true });
+              ctx.drawImage(im, 0, 0, cw, ch);
+
+              var outType = (file.type === 'image/png' || file.type === 'image/webp') ? file.type : 'image/jpeg';
+              var quality = outType === 'image/jpeg' ? 0.86 : undefined;
+              var out = (quality != null) ? c.toDataURL(outType, quality) : c.toDataURL(outType);
+              resolve(out);
+            }catch(e){ resolve(src); }
+          };
+          im.onerror = function(){ resolve(src); };
+          im.src = src;
+        }catch(e){
+          reject(e);
+        }
+      };
+      r.readAsDataURL(file);
+    });
+  }
+
+  if (btnInsert && fileInput){
+    btnInsert.addEventListener('click', function(){
+      try{ fileInput.click(); }catch(e){}
+    });
+  }
+
+  if (fileInput){
+    fileInput.addEventListener('change', function(){
+      var f = fileInput.files && fileInput.files[0];
+      if (!f) return;
+      readAndResizeToDataURL(f)
+        .then(function(dataUrl){ showPreview(dataUrl); })
+        .catch(function(err){ console.error(err); });
+    });
+  }
+
+  if (btnClear){
+    btnClear.addEventListener('click', function(){ clearLogo(); });
+  }
+
+  if (drop && fileInput){
+    drop.addEventListener('dragover', function(e){ e.preventDefault(); });
+    drop.addEventListener('drop', function(e){
+      e.preventDefault();
+      try{
+        var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (!f) return;
+        readAndResizeToDataURL(f)
+          .then(function(dataUrl){ showPreview(dataUrl); })
+          .catch(function(err){ console.error(err); });
+      }catch(err){ console.error(err); }
+    });
+  }
+
+  try{
+    if (img && img.getAttribute('src')){
+      showPreview(img.getAttribute('src'));
+    }
+  }catch(e){}
+})();
+
+/* ===================== SAVE + CLOSE ===================== */
+var _bizSaving = false;
+function bizSaveBusinessAndClose(ev){
+  try{ if (ev) ev.preventDefault(); }catch(e){}
+  if (_bizSaving) return false;
+  _bizSaving = true;
+
+  var form = document.getElementById('bizForm');
+  if (!form){ _bizSaving = false; bizClosePopup(); return false; }
+
+  if (!window.fetch){
+    try{ form.submit(); }catch(e){}
+    return false;
+  }
+
+  var btn = document.getElementById('bizSaveBtn');
+  if (btn){
+    btn.disabled = true;
+    btn.style.opacity = '.6';
+  }
+
+  fetch(form.action, {
+    method: 'POST',
+    body: new FormData(form),
+    credentials: 'same-origin',
+    headers: { 'X-Requested-With': 'fetch' }
+  })
+  .then(function(res){
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res;
+  })
+  .then(function(){
+    // ✅ embutido: recarrega a página (uma vez, só após salvar de verdade)
+    // pra refletir nome/logo do negócio na sidebar; nunca é um reload
+    // "de fundo" — só acontece por causa dessa ação explícita do usuário.
+    if(__bizEmbedded()){ location.reload(); return; }
+    bizClosePopup();
+  })
+  .catch(function(err){
+    console.error(err);
+    try{ form.submit(); }catch(e){}
+  })
+  .finally(function(){
+    _bizSaving = false;
+    if (btn){
+      btn.disabled = false;
+      btn.style.opacity = '';
+    }
+  });
+
+  return false;
+}
+</script>

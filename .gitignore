@@ -1,0 +1,40 @@
+# Ambientes e dependencias (reconstruiveis)
+.venv/
+venv/
+node_modules/
+
+# Artefatos de build do PyInstaller
+build/
+dist/
+
+# Saida do Inno Setup (instalador vai como asset de Release)
+installer_output/
+
+# Bytecode Python
+__pycache__/
+*.py[cod]
+
+# Dados reais do negocio - NUNCA versionar
+data/
+*.db
+*.sqlite3
+
+# Traducoes compiladas (Babel)
+*.mo
+
+# Binario de terceiro - baixar conforme instrucoes do README
+tools/*.exe
+
+# Configuracao local e segredos
+.env
+*.local.json
+
+# Sistema operacional e editores
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/
+
+# Logs
+*.log
