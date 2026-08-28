@@ -334,35 +334,49 @@ app = Flask(__name__, template_folder=str(TEMPLATES_DIR))
 # APP_SESSION_TOKEN. Toda requisicao precisa apresenta-lo (cookie ja setado,
 # header X-SSM-Token injetado pelo Electron, ou ?k=<token> na 1a navegacao).
 # Assim, mesmo outro usuario/processo da MESMA maquina abrindo
-# http://127.0.0.1:<porta> no navegador recebe 403. Se a env var nao estiver
-# definida (rodar server.py sozinho em dev), a trava fica desligada.
+# http://127.0.0.1:<porta> no navegador recebe 403.
+#
+# A trava esta SEMPRE ativa. Se APP_SESSION_TOKEN nao vier do ambiente
+# (ex.: rodar server.py sozinho em dev), um token e sorteado aqui e
+# registrado no log -- copie-o e use como ?k=<token> na primeira navegacao.
 _SESSION_TOKEN = os.environ.get("APP_SESSION_TOKEN", "").strip()
+_SESSION_TOKEN_FROM_ENV = bool(_SESSION_TOKEN)
+if not _SESSION_TOKEN:
+    _SESSION_TOKEN = secrets.token_urlsafe(24)
 _AUTH_COOKIE = "ssm_auth"
 
-# secret_key da sessao Flask: deriva do token (ou aleatorio) em vez de "dev".
-app.secret_key = _SESSION_TOKEN or secrets.token_hex(32)
+# secret_key da sessao Flask: deriva do token (sempre definido) em vez de "dev".
+app.secret_key = _SESSION_TOKEN
 
-if _SESSION_TOKEN:
-    @app.before_request
-    def _require_session_token():
-        got = (request.cookies.get(_AUTH_COOKIE)
-               or request.headers.get("X-SSM-Token")
-               or request.args.get("k")
-               or "")
-        if secrets.compare_digest(str(got), _SESSION_TOKEN):
-            g._ssm_need_cookie = (request.cookies.get(_AUTH_COOKIE) != _SESSION_TOKEN)
-            return None
-        return ("Forbidden", 403, {"Content-Type": "text/plain; charset=utf-8"})
+if not _SESSION_TOKEN_FROM_ENV:
+    app.logger.warning(
+        "APP_SESSION_TOKEN nao definido no ambiente; token de sessao sorteado "
+        "para esta execucao: %s (use ?k=<token> na primeira navegacao)",
+        _SESSION_TOKEN,
+    )
 
-    @app.after_request
-    def _grant_session_cookie(resp):
-        try:
-            if getattr(g, "_ssm_need_cookie", False):
-                resp.set_cookie(_AUTH_COOKIE, _SESSION_TOKEN,
-                                httponly=True, samesite="Strict", path="/")
-        except Exception:
-            pass
-        return resp
+
+@app.before_request
+def _require_session_token():
+    got = (request.cookies.get(_AUTH_COOKIE)
+           or request.headers.get("X-SSM-Token")
+           or request.args.get("k")
+           or "")
+    if secrets.compare_digest(str(got), _SESSION_TOKEN):
+        g._ssm_need_cookie = (request.cookies.get(_AUTH_COOKIE) != _SESSION_TOKEN)
+        return None
+    return ("Forbidden", 403, {"Content-Type": "text/plain; charset=utf-8"})
+
+
+@app.after_request
+def _grant_session_cookie(resp):
+    try:
+        if getattr(g, "_ssm_need_cookie", False):
+            resp.set_cookie(_AUTH_COOKIE, _SESSION_TOKEN,
+                            httponly=True, samesite="Strict", path="/")
+    except Exception:
+        pass
+    return resp
 # --------------------------------------------------------------------------------------
 # TEMP BIN (download token) â€” usado para exportar XLSX/PDF sem gravar em disco
 # --------------------------------------------------------------------------------------
@@ -2880,7 +2894,10 @@ def receipt_batch():
         }
         img_dataurl = (request.form.get("img_dataurl") or "").strip() or None
         FPDF = _get_FPDF()
-        pdf = FPDF(unit="mm", format=(80, 220))
+        # Mesmo construtor do /receipt/<sid>: cada pagina define seu proprio
+        # formato (58x210) dentro de _render_one_receipt_pdf, entao nao ha
+        # motivo para um tamanho de pagina default diferente aqui.
+        pdf = FPDF()
         wrote_any = False
         for sid in ids:
             sale = _find_sale_by_id(sid)

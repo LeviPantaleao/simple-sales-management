@@ -1,14 +1,14 @@
 {
   "name": "ssm",
   "version": "1.0.0",
-  "description": "",
+  "description": "Simple Sales Management - offline Windows desktop app for clients, sales and 58mm thermal PDF receipts",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test tests/money_mask.test.js"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Levi Pantaleão",
+  "license": "MIT",
   "type": "commonjs",
   "devDependencies": {
     "electron": "43.1.0"
