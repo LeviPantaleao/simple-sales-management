@@ -17,7 +17,7 @@ matching record.
 
 **Sales list.** Every sale, searchable and filterable by month, year, code or
 product, with per-row view / edit / delete / print receipt actions.
-> `<img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/da5bdd04-4f24-4d93-b25d-2b015009ed5b" />`
+<img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/da5bdd04-4f24-4d93-b25d-2b015009ed5b" />
 
 **New sale.** Product, the cash-register-style amount entry (digits push in
 from the cents place), and the optional discount with a final amount that
