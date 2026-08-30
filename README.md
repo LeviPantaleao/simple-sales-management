@@ -7,6 +7,21 @@ A small offline Windows desktop app for a single small business to record
 clients, register sales with an optional discount, and print a receipt as a
 58 mm thermal-roll PDF.
 
+Before SSM, client and sale records were kept on paper — one slip per client,
+filed by hand. Finding a specific client or a specific sale meant going
+through that stack page by page. SSM replaces the paper trail: every client
+and sale is searchable in seconds, and a receipt prints straight from the
+matching record.
+
+<!-- Screenshots: drop 3 PNGs and 1 GIF at the paths below, then delete this
+     comment. Suggested shots: the sales list, the new-sale form, a generated
+     receipt PDF; GIF: register a sale end-to-end through printing the receipt. -->
+| | | |
+|---|---|---|
+| ![Sales list](docs/screenshots/sales-list.png) | ![New sale](docs/screenshots/new-sale.png) | ![Receipt](docs/screenshots/receipt.png) |
+
+![Sale-to-receipt flow](docs/screenshots/sale-to-receipt.gif)
+
 ---
 
 ## What it does
@@ -34,6 +49,10 @@ There are no user accounts and no cloud component.
 ---
 
 ## Architecture
+
+For a fuller reference see [`ARCHITECTURE.md`](ARCHITECTURE.md); for the
+reasoning behind each choice below (problem, alternatives, known limits) see
+[`DECISIONS.md`](DECISIONS.md).
 
 - **Backend:** a Flask application (`server.py`) that renders the UI from
   server-side templates in `viewables/` and exposes the JSON/form endpoints the
@@ -112,6 +131,32 @@ runs on.
 
 ---
 
+## Known limitations and technical debt
+
+- **`server.py` is a single file of roughly 3,000 lines** — every route,
+  every data-access helper, PDF generation, i18n plumbing, and the
+  signed-bundle logic in one module. It is not split into packages.
+- **`viewer.py` generates the Electron shell's `main.js`/`preload.js` from a
+  single function over 1,000 lines**, emitting JavaScript as an f-string
+  template. That generated code has no syntax checking, no linting, and no
+  test coverage of its own — see decision D5 in
+  [`DECISIONS.md`](DECISIONS.md).
+- **JavaScript is embedded directly in the HTML templates** (`<script>`
+  blocks inside `management.html` and the other `viewables/*.html` files)
+  rather than living in separate `.js` files, except for the two files that
+  were extracted for testability (`app-common.js`, `money-mask.js`).
+- **Test coverage is narrow.** `tests/test_server.py` and
+  `tests/money_mask.test.js` cover money parsing, the signed-bundle
+  verifier, atomic writes, and the money-input mask — not the route handlers,
+  the PDF rendering, the i18n table, or the Electron shell.
+- **Single user, single machine, Windows only.** There are no user accounts,
+  no concurrent-writer support beyond the single-instance guarantee at the
+  Electron layer, and no macOS/Linux build — the packaging pipeline
+  (PyInstaller spec, Inno Setup script, DPAPI-protected export key) assumes
+  Windows throughout.
+
+---
+
 ## Install (end users)
 
 Download `SSM-Setup.exe` from the project's
@@ -170,11 +215,13 @@ This launches Flask and opens the Electron window using the Electron binary in
 
 ### Tests
 
-One test exists, covering the cash-register-style money input mask used in the
-sale form:
-
 ```powershell
-npm test        # runs: node --test tests/money_mask.test.js
+npm test        # Node's test runner: viewables/money-mask.js (the money input mask)
+
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pytest    # server.py: money parsing, signed-bundle
+                                         # verification, atomic writes, export-key
+                                         # protection, receipt filenames
 ```
 
 ---
@@ -195,7 +242,23 @@ copyleft license texts are in [`LICENSES/`](LICENSES/).
 
 ## AI assistance disclosure
 
-This project was built with the help of Claude and Claude Code, under my
-direction. Commits made with that assistance carry a
-`Co-Authored-By: Claude` trailer, kept deliberately as a transparent record of
-how the work was done.
+**The application is mine.** The concept — Electron as a "browser" shell
+around a lightweight pseudo-app, `viewer.py` packaged into a single `.exe`,
+and an installer that seeds the machine's detected language so the app
+starts in the right one — was mine, and so was the original implementation
+(the `Commit inicial` in this repository's history predates any AI
+assistance). The spreadsheet export and the PDF receipt printing were
+features I designed and had built. SSM replaces an earlier version of the
+same idea I had also built myself: an automated Excel workbook that did the
+same job by filtering between worksheets — "Clientes" and "Vendas" — and
+produced the receipt by writing the sale into a third "Imprimir Recibo"
+worksheet. SSM has been in daily use at the small business it was built for.
+
+**What came later, with AI assistance.** The MIT license and third-party
+license inventory, the version/build metadata cleanup, and the audit pass
+that produced most of the fixes in `CHANGELOG.md` and this documentation
+(`ARCHITECTURE.md`, `DECISIONS.md`, this section) were done with Claude and
+Claude Code, under my direction. Commits made with that assistance carry a
+`Co-Authored-By: Claude` trailer, kept deliberately as a transparent record
+of how the work was done. The requirements, the architecture decisions
+recorded in `DECISIONS.md`, and the review of everything shipped are mine.
