@@ -1,15 +1,15 @@
 # Decisions
 
-Why SSM is built the way it is — one entry per architectural decision, in the
+Why SSM is built the way it is. One entry per architectural decision, in the
 author's own words from a Q&A pass over the codebase. Each entry states the
-problem, what was considered and rejected, and the known limit of the choice
-(when it stops being the right one). See [`ARCHITECTURE.md`](ARCHITECTURE.md)
-for the resulting system, factually described.
+problem, what was considered and rejected, and the known limit of the choice:
+when it stops being the right one. See [`ARCHITECTURE.md`](ARCHITECTURE.md)
+for the resulting system, described without justification.
 
-A note on provenance: for two entries (D1, D2) the author's answer was "apply
-your own recommendation" rather than a first-hand account of the reasoning —
-that is called out explicitly in those entries instead of being presented as
-if it were the author's original deliberation.
+Provenance note: for two entries (D1, D2) the author's answer was "apply your
+own recommendation," not a first-hand account of the reasoning. Those two say
+so plainly instead of being written up as if they were the author's original
+deliberation.
 
 ---
 
@@ -83,8 +83,8 @@ comparison). The Inno Setup installer additionally adds Windows Firewall
 rules blocking inbound connections to both SSM executables.
 
 **Context (in the author's words):** the goal was that the backend must
-**not vazar para a rede da loja de jeito nenhum** — not be reachable from the
-store's network under any circumstance, not just "not by default."
+**not vazar para a rede da loja de jeito nenhum**: it must never be reachable
+from the store's network, period — not merely unreachable by default.
 
 **Alternatives considered:** Not raised as alternatives by the author in
 those terms; the loopback bind and the firewall rule were treated as two
@@ -113,8 +113,8 @@ refinado e conflitava com alguns recursos visuais** — pywebview was
 considered and rejected: lighter, but less polished, and it conflicted with
 some of the visual features the UI needed. The resulting installer size
 (roughly 150–250 MB, because Electron bundles Chromium) was accepted
-consciously, in the author's words, **em prol de seu desempenho** — in
-favor of the performance/rendering quality that gets.
+consciously, in the author's words, **em prol de seu desempenho**: in
+exchange for the rendering performance Electron gives the UI.
 
 **Alternatives considered:** pywebview (rejected — see above). Opening the
 UI in the user's default browser instead of a dedicated window was not
@@ -189,11 +189,11 @@ bundle: the data payload plus an HMAC-SHA256 signature over its canonical
 JSON encoding. The key is generated on first use and persisted in
 `CONFIG_DIR/export_key.json`, DPAPI-protected at rest on Windows.
 
-**Context:** The stated purpose is integrity, not secrecy — to make an
-exported file "recognizable only by the program" (per the code's own
-comment) and reject one that was hand-edited or came from a different
-export/import format, not to keep its contents confidential; the payload is
-still plain, readable JSON.
+**Context:** The stated purpose is integrity: make an exported file
+"recognizable only by the program" (per the code's own comment), and reject
+one that was hand-edited or came from a different export/import format. The
+payload stays plain, readable JSON — the goal was never to keep its contents
+confidential.
 
 **Alternatives considered:** Encryption (e.g. password-based, Fernet/AES-GCM)
 would additionally keep the contents confidential, but was not adopted —
