@@ -1521,7 +1521,12 @@ def main():
         # Em build congelado (PyInstaller), Path(__file__).parent não é confiável;
         # usa a pasta do executável real.
         cwd_for_popen = str(Path(sys.executable).parent) if getattr(sys, "frozen", False) else str(Path(__file__).parent)
-        proc = subprocess.Popen(args, cwd=cwd_for_popen, creationflags=creationflags)
+        # O terminal integrado do VS Code exporta ELECTRON_RUN_AS_NODE=1, que faz
+        # o electron.exe rodar como Node puro (sem janela) e derruba o launch.
+        # Removemos só do ambiente do filho.
+        child_env = os.environ.copy()
+        child_env.pop("ELECTRON_RUN_AS_NODE", None)
+        proc = subprocess.Popen(args, cwd=cwd_for_popen, creationflags=creationflags, env=child_env)
         return proc.wait()
     except Exception as e:
         import traceback
