@@ -7,6 +7,7 @@ writer, and the receipt-filename builders.
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 
@@ -120,6 +121,44 @@ def test_verify_bundle_rejects_malformed(srv, mutate, expected_reason):
 @pytest.mark.parametrize("not_a_dict", ["nope", 123, None, ["a"]])
 def test_verify_bundle_rejects_non_dict(srv, not_a_dict):
     assert srv._verify_bundle(not_a_dict) == (False, "invalid_json")
+
+
+# --------------------------------------------------------------------------------------
+# _get_export_key  (DPAPI-protected at rest on Windows; migrates the legacy
+# plaintext file in place, keeping the key VALUE so old bundles still verify)
+# --------------------------------------------------------------------------------------
+
+def test_export_key_is_protected_at_rest_and_stable(srv, tmp_path, monkeypatch):
+    monkeypatch.setattr(srv, "_EXPORT_KEY_FILE", tmp_path / "export_key.json")
+
+    key = srv._get_export_key()
+    assert len(key) == 32
+
+    raw = json.loads(srv._EXPORT_KEY_FILE.read_text("utf-8"))
+    if srv._dpapi_available():
+        assert "protected_b64" in raw and "key_b64" not in raw
+        # the file on disk must not contain the raw key bytes
+        assert base64.b64encode(key).decode("ascii") not in raw["protected_b64"]
+    else:
+        assert "key_b64" in raw  # non-Windows fallback
+
+    assert srv._get_export_key() == key  # stable across calls
+
+
+def test_export_key_migrates_legacy_plaintext_file(srv, tmp_path, monkeypatch):
+    monkeypatch.setattr(srv, "_EXPORT_KEY_FILE", tmp_path / "export_key.json")
+    legacy_key = srv.secrets.token_bytes(32)
+    srv._EXPORT_KEY_FILE.write_text(
+        json.dumps({"key_b64": base64.b64encode(legacy_key).decode("ascii")}), "utf-8"
+    )
+
+    got = srv._get_export_key()
+    assert got == legacy_key  # same key value -> bundles signed before still verify
+
+    if srv._dpapi_available():
+        raw = json.loads(srv._EXPORT_KEY_FILE.read_text("utf-8"))
+        assert "protected_b64" in raw and "key_b64" not in raw
+        assert srv._get_export_key() == legacy_key  # still stable post-migration
 
 
 # --------------------------------------------------------------------------------------

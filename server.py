@@ -726,25 +726,100 @@ def _save_json(p: Path, obj):
 # --------------------------------------------------------------------------------------
 _EXPORT_KEY_FILE = CONFIG_DIR / "export_key.json"
 
+
+# --- DPAPI (Windows) --- protects the HMAC export key at rest, tied to the
+# current Windows user profile. Same mechanism Windows apps normally use for
+# local secrets; no extra dependency (ctypes + crypt32.dll, already how
+# viewer.py talks to other Windows APIs).
+def _dpapi_available() -> bool:
+    return sys.platform == "win32"
+
+
+def _dpapi_protect(data: bytes) -> bytes:
+    import ctypes
+    from ctypes import wintypes
+
+    class _DATA_BLOB(ctypes.Structure):
+        _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_byte))]
+
+    buf = ctypes.create_string_buffer(data, len(data))
+    blob_in = _DATA_BLOB(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte)))
+    blob_out = _DATA_BLOB()
+    ok = ctypes.windll.crypt32.CryptProtectData(
+        ctypes.byref(blob_in), "SSM export key", None, None, None, 0, ctypes.byref(blob_out)
+    )
+    if not ok:
+        raise ctypes.WinError()
+    try:
+        return ctypes.string_at(blob_out.pbData, blob_out.cbData)
+    finally:
+        ctypes.windll.kernel32.LocalFree(blob_out.pbData)
+
+
+def _dpapi_unprotect(data: bytes) -> bytes:
+    import ctypes
+    from ctypes import wintypes
+
+    class _DATA_BLOB(ctypes.Structure):
+        _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_byte))]
+
+    buf = ctypes.create_string_buffer(data, len(data))
+    blob_in = _DATA_BLOB(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte)))
+    blob_out = _DATA_BLOB()
+    ok = ctypes.windll.crypt32.CryptUnprotectData(
+        ctypes.byref(blob_in), None, None, None, None, 0, ctypes.byref(blob_out)
+    )
+    if not ok:
+        raise ctypes.WinError()
+    try:
+        return ctypes.string_at(blob_out.pbData, blob_out.cbData)
+    finally:
+        ctypes.windll.kernel32.LocalFree(blob_out.pbData)
+
+
+def _save_export_key(key: bytes) -> None:
+    """Persist `key`, DPAPI-protected when available, plaintext as a last resort
+    (e.g. non-Windows dev environment) so the app keeps working either way."""
+    try:
+        if _dpapi_available():
+            protected = _dpapi_protect(key)
+            payload = {"protected_b64": base64.b64encode(protected).decode("ascii")}
+        else:
+            payload = {"key_b64": base64.b64encode(key).decode("ascii")}
+        _EXPORT_KEY_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), "utf-8")
+    except Exception:
+        logger.error("[export_key] could not persist the export key", exc_info=True)
+
+
 def _get_export_key() -> bytes:
     """
     Key persisted on disk (CONFIG_DIR) so exported files can be validated later.
+    DPAPI-protected at rest on Windows (tied to the current user profile) —
+    the key VALUE never changes across that migration, so bundles signed
+    before this change keep validating.
     """
     try:
         if _EXPORT_KEY_FILE.exists():
             raw = json.loads(_EXPORT_KEY_FILE.read_text("utf-8"))
-            k = raw.get("key_b64") if isinstance(raw, dict) else None
-            if isinstance(k, str) and k.strip():
-                return base64.b64decode(k.encode("ascii"))
+            if isinstance(raw, dict):
+                protected_b64 = raw.get("protected_b64")
+                if isinstance(protected_b64, str) and protected_b64.strip():
+                    return _dpapi_unprotect(base64.b64decode(protected_b64.encode("ascii")))
+
+                # Legacy plaintext key file (pre-DPAPI). Read it, then migrate
+                # it to the protected format in place — same key bytes, so
+                # already-exported bundles keep verifying.
+                legacy_b64 = raw.get("key_b64")
+                if isinstance(legacy_b64, str) and legacy_b64.strip():
+                    key = base64.b64decode(legacy_b64.encode("ascii"))
+                    if _dpapi_available():
+                        _save_export_key(key)
+                    return key
     except Exception:
-        pass
+        logger.error("[export_key] could not read the export key; generating a new one", exc_info=True)
 
     key = secrets.token_bytes(32)
-    try:
-        payload = {"key_b64": base64.b64encode(key).decode("ascii")}
-        _EXPORT_KEY_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), "utf-8")
-    except Exception:
-        pass
+    _save_export_key(key)
     return key
 
 

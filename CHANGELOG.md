@@ -69,6 +69,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `THIRD_PARTY_LICENSES.md`: the note that `requirements.txt` pinned no
   versions was updated to describe the new pinning.
 
+### Security
+
+- The HMAC key used to sign/verify export bundles (`CONFIG_DIR/export_key.json`)
+  was stored in plaintext. It is now protected at rest with the Windows DPAPI
+  (`CryptProtectData` / `CryptUnprotectData`, tied to the current Windows user
+  profile) when available. The key *value* is unchanged — a legacy plaintext
+  file is read once and migrated in place — so bundles exported before this
+  change keep verifying.
+
 ### Fixed
 
 - Several data-mutating endpoints ignored the return value of the atomic
