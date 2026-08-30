@@ -4,18 +4,15 @@
 ;
 ;  - Idiomas do setup: Ingles, Portugues (BR), Espanhol
 ;  - Nome do programa instalado (atalhos, Menu Iniciar, Adicionar/Remover
-;    Programas, E os metadados do proprio SSM.exe) e LOCALIZADO conforme
-;    o idioma escolhido no setup.
+;    Programas) e LOCALIZADO conforme o idioma escolhido no setup.
+;    OBS: os metadados do arquivo SSM.exe (ProductName/FileDescription)
+;    sao FIXOS em ingles, gravados pelo build_ssm.ps1 -- ver D8/D9 em
+;    DECISIONS.md (o rcedit foi movido pro build para nao invalidar a
+;    assinatura de codigo do SSM.exe).
 ;  - Grava ssm_install_lang.txt para o app abrir no idioma do setup.
 ;
 ;  Pre-requisito: build PyInstaller feito em dist\ssm\ (com build_ssm.ps1,
-;  que ja renomeia electron.exe -> SSM.exe e gera resources\app).
-;
-;  IMPORTANTE: coloque o rcedit-x64.exe em C:\ssm\tools\rcedit-x64.exe
-;  antes de compilar este .iss (o instalador o embute e usa durante a
-;  instalacao para gravar o nome localizado nos metadados do SSM.exe).
-;  Ja esta instalado globalmente via npm; copie de:
-;    %APPDATA%\npm\node_modules\rcedit\bin\rcedit-x64.exe
+;  que renomeia electron.exe -> SSM.exe, roda o rcedit e gera resources\app).
 ;
 ;  Compilar: abrir no Inno Setup Compiler > Compile   (ou: iscc ssm_setup.iss)
 ; =====================================================================
@@ -80,24 +77,18 @@ Name: "en";   MessagesFile: "compiler:Default.isl"
 Name: "ptbr"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
 Name: "es";   MessagesFile: "compiler:Languages\Spanish.isl"
 
-; Nome do programa traduzido por idioma -- usado nos atalhos E nos
-; metadados do SSM.exe (via rcedit, no [Code] abaixo).
+; Nome do programa traduzido por idioma -- usado nos atalhos, no Menu
+; Iniciar e no "Adicionar/Remover Programas" ({cm:AppName}).
 [CustomMessages]
 en.AppName=Simple Sales Management
 ptbr.AppName=Gestor Simples de Vendas
 es.AppName=Gestion Simple de Ventas
-
-en.AppDescription=Simple Sales Management
-ptbr.AppDescription=Gestor Simples de Vendas
-es.AppDescription=Gestion Simple de Ventas
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
 Source: "{#BuildDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-; rcedit embutido no instalador (nao fica no diretorio de instalacao final)
-Source: "tools\rcedit-x64.exe"; DestDir: "{tmp}"; Flags: dontcopy
 
 [Icons]
 Name: "{group}\{cm:AppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\app.ico"
@@ -228,60 +219,11 @@ begin
   PatchPreferredLocaleInFile(ExpandConstant('{localappdata}\SimpleSalesManagement\data\settings.json'), NewValue);
 end;
 
-// Grava o nome LOCALIZADO (idioma escolhido no setup) diretamente nos
-// metadados do SSM.exe instalado (ProductName/FileDescription), usando
-// o rcedit embutido no instalador. Isso garante que qualquer superficie
-// do Windows que leia esses metadados (Gerenciador de Tarefas, Propriedades
-// do arquivo, e o menu da barra de tarefas quando o SSM.exe e aberto sem
-// passar pelo launcher) mostre o nome no idioma certo.
-procedure LocalizeExeMetadata();
-var
-  RceditPath: String;
-  SsmExePath: String;
-  IcoPath: String;
-  AppNameLocalized: String;
-  Params: String;
-  ResultCode: Integer;
-begin
-  SsmExePath := ExpandConstant('{app}\_internal\node_modules\electron\dist\SSM.exe');
-  if not FileExists(SsmExePath) then
-  begin
-    Log('SSM: SSM.exe nao encontrado em ' + SsmExePath + ' -- pulando localizacao de metadados.');
-    Exit;
-  end;
-
-  ExtractTemporaryFile('rcedit-x64.exe');
-  RceditPath := ExpandConstant('{tmp}\rcedit-x64.exe');
-  if not FileExists(RceditPath) then
-  begin
-    Log('SSM: rcedit-x64.exe nao encontrado apos extracao -- pulando localizacao de metadados.');
-    Exit;
-  end;
-
-  AppNameLocalized := CustomMessage('AppName');
-
-  // IMPORTANTE: --set-icon precisa ir NA MESMA chamada dos --set-version-string.
-  // Rodar o rcedit em duas chamadas separadas sobre o mesmo exe (uma so com
-  // icone, outra so com strings) pode fazer um dos grupos de icone internos
-  // do binario do Electron voltar ao padrao (o "atomo" do Electron) --
-  // por isso tudo e gravado de uma vez so aqui.
-  IcoPath := ExpandConstant('{app}\app.ico');
-
-  Params := '"' + SsmExePath + '"';
-  if FileExists(IcoPath) then
-    Params := Params + ' --set-icon "' + IcoPath + '"';
-  Params := Params +
-    ' --set-version-string "ProductName" "' + AppNameLocalized + '"' +
-    ' --set-version-string "FileDescription" "' + AppNameLocalized + '"' +
-    ' --set-version-string "InternalName" "SSM"' +
-    ' --set-version-string "OriginalFilename" "SSM.exe"';
-
-  Log('SSM: executando rcedit para localizar metadados + icone (' + AppNameLocalized + ')');
-  if not Exec(RceditPath, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-    Log('SSM: falha ao executar rcedit (erro do sistema).')
-  else
-    Log('SSM: rcedit concluido com codigo ' + IntToStr(ResultCode));
-end;
+// NOTA: o icone e os metadados do SSM.exe (ProductName/FileDescription/
+// InternalName/OriginalFilename) sao gravados pelo build_ssm.ps1 via rcedit,
+// numa unica chamada, ANTES da assinatura de codigo. Aqui no instalador
+// nao se toca mais nesse binario -- rodar rcedit pos-instalacao invalidaria
+// a assinatura Authenticode do SSM.exe. Ver D8/D9 em DECISIONS.md.
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
@@ -298,7 +240,5 @@ begin
     // Garante que o idioma escolhido AGORA no setup prevaleça mesmo se
     // já existirem dados de uma instalação/teste anterior em outro idioma.
     PatchAllKnownSettingsFiles(SettingsLocaleValue());
-
-    LocalizeExeMetadata();
   end;
 end;

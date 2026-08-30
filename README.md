@@ -84,11 +84,12 @@ reasoning behind each choice below (problem, alternatives, known limits) see
   (`os.replace` semantics), so a crash mid-write cannot truncate the live file.
 - **Packaging:** a Windows installer built with Inno Setup 6 (`ssm_setup.iss`).
   The installer is localized (English / Portuguese (BR) / Spanish); the chosen
-  language sets the installed program name and seeds the app's initial
-  language. It also adds Windows Firewall rules that block inbound connections
-  to the SSM executables as defence in depth, and — once, during installation —
-  uses an embedded `rcedit` to write the localized program name into the
-  `SSM.exe` metadata.
+  language sets the installed program name (shortcuts, Start Menu, Add/Remove
+  Programs) and seeds the app's initial language. It also adds Windows Firewall
+  rules that block inbound connections to the SSM executables as defence in
+  depth. The `SSM.exe` icon and version-string metadata are written by
+  `build_ssm.ps1` with `rcedit` at build time (fixed English name), before the
+  optional code-signing step — see [`DECISIONS.md`](DECISIONS.md) D8/D9.
 
 ---
 
@@ -181,8 +182,8 @@ release asset (roughly 190 MB, because it contains the Electron runtime).
 
 The setup wizard asks for a language (English / Portuguese (BR) / Spanish),
 which determines the installed program name and the language the app starts in.
-Administrator rights are required (the installer writes firewall rules and
-program metadata).
+Administrator rights are required (the installer writes Windows Firewall
+rules).
 
 **The installer is not code-signed.** On a typical machine Windows SmartScreen
 shows a "Windows protected your PC" prompt — click *More info* then *Run
@@ -202,7 +203,14 @@ is wired into the build for when a certificate is available — see
 - Windows x64
 - Python 3.13 (developed with 3.13.7)
 - Node.js ≥ 22.12 (developed with 24.x)
+- `rcedit-x64.exe` — not in the repo; `build_ssm.ps1` fails without it. Put it
+  at `tools\rcedit-x64.exe` (from
+  <https://github.com/electron/rcedit/releases>, or `npm i -g rcedit` and copy
+  from `%APPDATA%\npm\node_modules\rcedit\bin\`).
 - Inno Setup 6+ — only for the installer step
+- A code-signing certificate — optional; without it the output is unsigned
+  (SmartScreen warning / Smart App Control block). See D9 in
+  [`DECISIONS.md`](DECISIONS.md).
 
 ### Steps
 
@@ -215,16 +223,15 @@ python -m venv .venv
 # 2. Electron (downloads the 43.1.0 runtime into node_modules)
 npm install
 
-# 3. rcedit — NOT in the repo, download it manually
-#    Get rcedit-x64.exe from https://github.com/electron/rcedit/releases
-#    and place it at:  tools\rcedit-x64.exe
-
-# 4. Package the backend + Electron into dist\ssm\
+# 3. Package the backend + Electron into dist\ssm\
+#    (needs tools\rcedit-x64.exe — see Prerequisites)
+#    add -SignPfx / -SignSubject to sign the executables
 powershell -ExecutionPolicy Bypass -File .\build_ssm.ps1
 
-# 5. Build the installer -> installer_output\SSM-Setup.exe
+# 4. Build the installer -> installer_output\SSM-Setup.exe
 #    Open ssm_setup.iss in the Inno Setup Compiler, or:
 iscc ssm_setup.iss
+#    to sign the installer too:  iscc "/Sssmsign=..." /DSIGN_ENABLED ssm_setup.iss
 ```
 
 To run without packaging, install the Python and npm dependencies (steps 1–2)

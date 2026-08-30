@@ -118,23 +118,51 @@ if (Test-Path $IconPath) { Copy-Item -Force $IconPath (Join-Path $DistDir "app.i
 # 7) Renomeia o electron.exe empacotado -> SSM.exe
 #    (a barra de tarefas do Windows mostra o nome do EXE que criou a janela)
 #
-#    IMPORTANTE: o icone/nome do SSM.exe (ProductName/FileDescription) NAO
-#    sao gravados aqui no build. Isso e feito UMA UNICA VEZ, no instalador
-#    (.iss), na hora da instalacao -- porque o nome precisa ser localizado
-#    conforme o idioma escolhido no setup, e porque editar o mesmo binario
-#    com rcedit em dois momentos separados (build + instalacao) corrompia
-#    a secao de icones (bug historico: icone virava o "atomo" do Electron).
-#    NAO reintroduzir uma chamada de rcedit aqui -- deixe so no ssm_setup.iss.
+#    O icone e os metadados (ProductName/FileDescription/InternalName/
+#    OriginalFilename) do SSM.exe sao gravados AQUI, no build, numa unica
+#    chamada de rcedit -- e NAO mais na instalacao. Motivo: o rcedit
+#    invalida a assinatura Authenticode do arquivo; rodando no build,
+#    antes do passo de assinatura (7c), a assinatura cobre o binario ja
+#    editado. Custo: o nome nos metadados do *arquivo* fica fixo em ingles
+#    ("Simple Sales Management") -- a UI, os atalhos, o Menu Iniciar e o
+#    "Adicionar/Remover Programas" continuam localizados (via {cm:AppName}
+#    no ssm_setup.iss). Ver D8/D9 em DECISIONS.md.
+#    A chamada e unica de proposito: rodar rcedit em duas passadas sobre o
+#    mesmo exe (icone numa, strings noutra) corrompe a secao de icones do
+#    binario do Electron (bug historico: icone virava o "atomo").
 $ElectronDistDir  = Join-Path $DistDir "_internal\node_modules\electron\dist"
 $PackedElectron   = Join-Path $ElectronDistDir "electron.exe"
 $RenamedElectron  = Join-Path $ElectronDistDir "SSM.exe"
 
 if (Test-Path $PackedElectron) {
     Copy-Item -Force $PackedElectron $RenamedElectron
-    Write-Host "Electron renomeado para SSM.exe (icone/nome serao gravados so no instalador)" -ForegroundColor Cyan
+    Write-Host "Electron renomeado para SSM.exe" -ForegroundColor Cyan
 } else {
     throw "electron.exe empacotado nao encontrado em $PackedElectron -- build interrompido."
 }
+
+# 7-rcedit) Icone + metadados fixos no SSM.exe (uma unica chamada).
+$RcEdit = $null
+foreach ($cand in @(
+    (Join-Path $ProjectDir "tools\rcedit-x64.exe"),
+    (Join-Path $env:APPDATA "npm\node_modules\rcedit\bin\rcedit-x64.exe"),
+    (Join-Path $ProjectDir "node_modules\rcedit\bin\rcedit-x64.exe")
+)) { if (Test-Path $cand) { $RcEdit = $cand; break } }
+if (-not $RcEdit) {
+    throw "rcedit-x64.exe nao encontrado. Copie para tools\rcedit-x64.exe (de %APPDATA%\npm\node_modules\rcedit\bin\ ou 'npm i -g rcedit')."
+}
+$ProductName = "Simple Sales Management"
+$RcArgs = @("$RenamedElectron")
+if (Test-Path $IconPath) { $RcArgs += @("--set-icon", "$IconPath") }
+$RcArgs += @(
+    "--set-version-string", "ProductName", $ProductName,
+    "--set-version-string", "FileDescription", $ProductName,
+    "--set-version-string", "InternalName", "SSM",
+    "--set-version-string", "OriginalFilename", "SSM.exe"
+)
+& $RcEdit @RcArgs
+if ($LASTEXITCODE -ne 0) { throw "rcedit falhou (exit $LASTEXITCODE) em SSM.exe" }
+Write-Host "rcedit: icone + metadados gravados em SSM.exe ('$ProductName')" -ForegroundColor Cyan
 
 # 7b) "Assa" um app Electron ESTATICO em resources\app, ao lado do SSM.exe.
 #     Isso garante que, mesmo se o SSM.exe for aberto SEM argumentos (ex.:

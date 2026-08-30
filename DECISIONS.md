@@ -215,9 +215,11 @@ threat model is "accidental/casual tampering," not "hostile local attacker."
 
 **Decision:** The Windows installer is built with Inno Setup 6
 (`ssm_setup.iss`), localized into English / Portuguese (BR) / Spanish. The
-bundled `electron.exe` is renamed to `SSM.exe`, and an embedded `rcedit` is
-run once, at install time, to rewrite `SSM.exe`'s `ProductName` /
-`FileDescription` metadata to the localized program name.
+bundled `electron.exe` is renamed to `SSM.exe`, and `rcedit` rewrites that
+binary's icon and its `ProductName` / `FileDescription` / `InternalName` /
+`OriginalFilename` version strings. `rcedit` runs **once, at build time**
+(`build_ssm.ps1`), with a fixed English name, so the write happens before the
+code-signing step and does not invalidate the signature.
 
 **Context (in the author's words):** **Electron Builder é bem menos
 refinado do que Inno Setup** — `electron-builder` (the more common packaging
@@ -230,14 +232,21 @@ completo** — presents itself as a complete, standalone program, not as
 **Alternatives considered:** `electron-builder` (rejected — see above).
 Leaving the shipped binary identified as "Electron" (skipping the `rcedit`
 step) was implicitly rejected in favor of the polished, dedicated-program
-identity described above.
+identity described above. Running `rcedit` at install time (so the file
+metadata could match the language picked in the wizard) was the original
+design; it was moved to build time because it breaks Authenticode signing
+(D9) and because a second `rcedit` pass on the same binary corrupted the
+Electron icon group.
 
-**Known limit:** `rcedit-x64.exe` is not committed to the repository (build
-instructions say to download it manually into `tools/rcedit-x64.exe`), so a
-from-source build has a manual, undocumented-in-code prerequisite the CI does
-not verify. The metadata rewrite happens once, at install time, tied to the
-installer's own chosen language — the installed program's *file* metadata
-does not change later if the in-app language is switched.
+**Known limit:** `rcedit-x64.exe` is not committed to the repository, so a
+from-source build has a manual prerequisite (`tools/rcedit-x64.exe`, or a
+global `npm i -g rcedit`); the build now hard-fails if it is missing, and CI
+does not build the installer so it never exercises this path. Because the
+`rcedit` write is at build time with one fixed string, the **file metadata**
+of `SSM.exe` (Task Manager process name, the file's Properties → Details) is
+always English "Simple Sales Management", regardless of install language. The
+user-facing name — the app UI, the Start Menu / desktop shortcuts, the
+Add/Remove Programs entry — is still localized (Inno `{cm:AppName}`).
 
 ---
 
@@ -277,9 +286,9 @@ turning the whole thing into a from-source run (rejected — defeats the
 non-technical-user goal). A self-signed certificate was not pursued because
 the user would still have to install and trust it manually.
 
-**Known limit:** even with signing wired in, `ssm_setup.iss` runs `rcedit`
-against `SSM.exe` **at install time** (D8), which invalidates any signature on
-that specific file. Full Smart App Control compatibility for the *installed*
-app would require moving the `rcedit` step into the build and signing
-afterwards — not done. The recommended path forward is a reputable OV
-certificate or a signing service such as Azure Trusted Signing.
+**Known limit:** the `rcedit` step was moved to build time (D8) so it runs
+before signing and no longer invalidates the `SSM.exe` signature. What
+remains is external: a certificate has to be obtained and has to build
+SmartScreen reputation. The recommended path is a reputable OV certificate or
+a signing service such as Azure Trusted Signing. Until then the binaries ship
+unsigned.
