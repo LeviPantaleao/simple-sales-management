@@ -9,14 +9,45 @@ on:
 jobs:
   test:
     runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - uses: actions/setup-node@v4.2.0
         with:
           node-version: 22
+          cache: npm
 
-      # The only test in the repo: tests/money_mask.test.js (pure Node,
-      # standard library only — no dependency install needed).
-      - name: Run tests
+      - uses: actions/setup-python@v5.4.0
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      # --- Node -----------------------------------------------------------
+      # tests/money_mask.test.js is pure Node stdlib; --ignore-scripts skips
+      # the Electron binary download, which the test does not need.
+      - name: Install Node dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Node tests
         run: npm test
+
+      # --- Python -------------------------------------------------------------
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Byte-compile every .py
+        run: python -m compileall -q server.py viewer.py languages.py tests
+
+      - name: Python tests
+        run: python -m pytest
+
+      # Non-blocking for now: the rule set (ruff.toml) is deliberately narrow
+      # (E9 + pyflakes). Review the findings, then widen the rules and drop
+      # continue-on-error to make this gate real.
+      - name: Lint (ruff)
+        continue-on-error: true
+        run: python -m ruff check --output-format github .

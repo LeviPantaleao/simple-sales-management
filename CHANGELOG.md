@@ -26,7 +26,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tests/conftest.py` and `pytest.ini`: hermetic setup that redirects
   `SSM_CONFIG_DIR` / `APP_DATA_DIR` to a temp directory before importing
   `server`, so the suite never reads or writes real business data.
-- `requirements-dev.txt` pinning `pytest==9.1.1`.
+- `requirements-dev.txt` pinning `pytest==9.1.1` and `ruff==0.16.5`.
+- `ruff.toml`: a deliberately narrow lint config (`E9` + pyflakes `F`
+  only; style rules left out for now).
+
+### CI
+
+- `.github/workflows/ci.yml` now also sets up Python 3.13, installs
+  `requirements.txt` + `requirements-dev.txt`, byte-compiles every `.py`,
+  and runs `pytest` — the workflow previously ran only the Node test, so
+  the Python side was entirely unchecked.
+- Actions are pinned to explicit released versions
+  (`checkout@v4.2.2`, `setup-node@v4.2.0`, `setup-python@v5.4.0`), and pip
+  and npm caching is enabled.
+- A `ruff` step is added, non-blocking (`continue-on-error`) for now; it
+  currently reports 6 findings (3 unused imports, 1 unused variable, and 2
+  `FPDF` "undefined name" hits that are annotation-only and harmless under
+  `from __future__ import annotations`).
 
 ### Changed
 

@@ -1,0 +1,18 @@
+# Conservative on purpose.
+#
+# Only two rule groups are enabled:
+#   E9  syntax errors (IndentationError, SyntaxError, ...)
+#   F   pyflakes — unused imports, unused variables, undefined names
+#
+# Style rules (line length, import ordering, quote style, pyupgrade, bugbear,
+# ...) are deliberately left out for now. The CI step that runs this starts
+# non-blocking (continue-on-error); once the current findings are triaged the
+# rule set can be widened and the step made blocking.
+
+target-version = "py313"
+line-length = 100
+
+extend-exclude = ["build", "dist", "installer_output", ".venv", "venv", "node_modules"]
+
+[lint]
+select = ["E9", "F"]
