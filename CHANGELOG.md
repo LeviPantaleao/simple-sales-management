@@ -71,6 +71,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Several data-mutating endpoints ignored the return value of the atomic
+  JSON writers (`_save_json` / `_save_sales` / `_save_clients_db` /
+  `_save_settings` / `_save_business`) and answered "ok" even when the write
+  failed. They now report the failure:
+  - `POST /sales` (new sale), `POST /sales/delete/<id>`,
+    `POST /clients/delete/<code>` and `POST /api/clients/delete_sales` return
+    HTTP 500 when the write fails, and the in-memory list is rolled back so
+    it never runs ahead of what is on disk.
+  - `POST /data/import` and `POST /data/reset` return HTTP 500 with the list
+    of files that could not be written, instead of a partial import/reset
+    reported as success.
+  - `_save_settings` and `_save_business` now return `bool`; the setup,
+    settings and business POST handlers surface a failure (a flashed error
+    on the form-post paths, HTTP 500 on the `fetch()` paths). Note: the
+    Welcome / Settings pages' `fetch()` callers do not yet act on a non-2xx
+    response — a small front-end follow-up.
+- The two `after_request` hooks that swallowed every exception with a bare
+  `pass` (`_grant_session_cookie`, `_content_language`) now log it.
 - `server.py` was stored with a UTF-8 BOM and contained double-encoded
   (mojibake) text in comments, docstrings and error strings. The BOM was
   removed and the affected characters restored; no code paths changed.

@@ -381,7 +381,9 @@ def _grant_session_cookie(resp):
             resp.set_cookie(_AUTH_COOKIE, _SESSION_TOKEN,
                             httponly=True, samesite="Strict", path="/")
     except Exception:
-        pass
+        # If the auth cookie never gets set, every later request 403s until
+        # the user re-navigates with ?k=<token>. Make that diagnosable.
+        logger.exception("[auth] failed to set session cookie")
     return resp
 # --------------------------------------------------------------------------------------
 # TEMP BIN (download token) — usado para exportar XLSX/PDF sem gravar em disco
@@ -516,7 +518,7 @@ def _load_settings() -> dict:
     return dict(_DEFAULT_SETTINGS)
 
 
-def _save_settings(obj: dict) -> None:
+def _save_settings(obj: dict) -> bool:
     try:
         d = dict(obj)
         for k in ("data_dir", "explorer_dir", "pdf_dir"):
@@ -525,8 +527,10 @@ def _save_settings(obj: dict) -> None:
         tmp = SETTINGS_FILE.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(d, ensure_ascii=False, indent=2), "utf-8")
         tmp.replace(SETTINGS_FILE)
+        return True
     except Exception as e:
         logger.error("[SETTINGS] write fail: %s", e)
+        return False
 
 
 babel = Babel()
@@ -591,7 +595,9 @@ def _content_language(resp):
         if getattr(g, "_forced_lang", None) is not None:
             resp.set_cookie("lang", g._forced_lang, max_age=60 * 60 * 24 * 365, samesite="Lax")
     except Exception:
-        pass
+        # Cosmetic: missing Content-Language header / the lang choice not
+        # sticking as a cookie. Log at warning, do not fail the response.
+        logger.warning("[i18n] could not set Content-Language / lang cookie", exc_info=True)
     return resp
 
 
@@ -804,8 +810,8 @@ def _load_business() -> dict:
     return raw if isinstance(raw, dict) else {}
 
 
-def _save_business(data: dict) -> None:
-    _save_json(BUSINESS_FILE, data or {})
+def _save_business(data: dict) -> bool:
+    return _save_json(BUSINESS_FILE, data or {})
 
 
 _IMG_DATAURL_RE = re.compile(
@@ -1365,7 +1371,9 @@ def first_setup_save():
         "pdf_dir": _posix(pdf_dir),
         "setup_done": True,
     })
-    _save_settings(s)
+    if not _save_settings(s):
+        flash(_t("Failed to save."), "error")
+        return redirect(url_for("welcome"))
     with contextlib.suppress(Exception):
         _save_bootstrap_dir(Path(s.get("data_dir") or str(DATA_DIR)))
 
@@ -1384,7 +1392,9 @@ def first_setup_save():
     elif posted_logo and _IMG_DATAURL_RE.match(posted_logo):
         data["logo_dataurl"] = posted_logo
 
-    _save_business(data)
+    if not _save_business(data):
+        flash(_t("Failed to save."), "error")
+        return redirect(url_for("welcome"))
 
     _reload_sales_from_disk()
 
@@ -1455,7 +1465,11 @@ def save_settings():
         "explorer_dir": _posix(explorer_in),
         "pdf_dir": _posix(pdf_dir_in),
     })
-    _save_settings(s)
+    if not _save_settings(s):
+        # settingspopup.html / welcome.html post this via fetch(); a non-2xx
+        # status is the signal they can act on. (The current JS does not yet
+        # surface it — that is a separate front-end fix.)
+        return (_t("Failed to save."), 500)
     with contextlib.suppress(Exception):
         _save_bootstrap_dir(Path(s.get("data_dir") or str(DATA_DIR)))
 
@@ -1638,10 +1652,19 @@ def data_import():
             sales_out.append(d)
 
         # salva no disco (formato normalizado do app)
-        _save_clients_db(clients_out)
-        _save_json(SALES_FILE, sales_out)
-        if isinstance(business, dict):
-            _save_business(business)
+        ok_clients = _save_clients_db(clients_out)
+        ok_sales = _save_json(SALES_FILE, sales_out)
+        ok_business = _save_business(business) if isinstance(business, dict) else True
+        if not (ok_clients and ok_sales and ok_business):
+            failed = [n for n, ok in
+                      (("clients.json", ok_clients), ("sales.json", ok_sales), ("business.json", ok_business))
+                      if not ok]
+            logger.error("[data_import] partial write, failed: %s", failed)
+            return jsonify({
+                "ok": False,
+                "error": _t("Failed to save."),
+                "partial_write": failed,
+            }), 500
 
         # recarrega estado em memória e sincroniza contagens
         _reload_sales_from_disk()
@@ -1663,8 +1686,12 @@ def data_import():
 @app.post("/data/reset")
 def data_reset():
     try:
-        _save_clients_db([])
-        _save_json(SALES_FILE, [])
+        ok_clients = _save_clients_db([])
+        ok_sales = _save_json(SALES_FILE, [])
+        if not (ok_clients and ok_sales):
+            failed = [n for n, ok in (("clients.json", ok_clients), ("sales.json", ok_sales)) if not ok]
+            logger.error("[data_reset] partial write, failed: %s", failed)
+            return jsonify({"ok": False, "error": _t("Failed to save."), "partial_write": failed}), 500
 
         with contextlib.suppress(Exception):
             _save_json(FILTERS_FILE, {})
@@ -1740,7 +1767,9 @@ def save_business():
     elif up and up.filename:
         data["logo_dataurl"] = _file_to_dataurl(up)
 
-    _save_business(data)
+    if not _save_business(data):
+        flash(_t("Failed to save."), "error")
+        return (_t("Failed to save."), 500)
     return redirect(url_for("business"))
 
 
@@ -1933,7 +1962,13 @@ def post_new_sale():
     NEXT_ID += 1
 
     update_client_everywhere(code_eff, name_eff, addr_eff, cont_eff, desc_eff)
-    _save_sales()
+    if not _save_sales():
+        # Rollback the in-memory append so the list view (which reloads from
+        # disk) and NEXT_ID stay consistent with what actually persisted.
+        SALES.pop()
+        NEXT_ID -= 1
+        flash(_t("Failed to save."), "error")
+        return redirect(url_for("new_sale", code=code_eff or ""))
 
     return redirect(url_for("list_sales"))
 
@@ -2132,12 +2167,15 @@ def delete_client(code: str):
     global SALES
     before = len(SALES)
     SALES = [v for v in SALES if v.get("code") != code]
-    if len(SALES) != before:
-        _save_sales()
+    if len(SALES) != before and not _save_sales():
+        logger.error("[delete_client] could not write sales.json for code %s", code)
+        return (_t("Failed to save."), 500)
 
     # também remove do clients.json (cadastro)
     db = [c for c in _load_clients_db() if c.get("code") != code]
-    _save_clients_db(db)
+    if not _save_clients_db(db):
+        logger.error("[delete_client] could not write clients.json for code %s", code)
+        return (_t("Failed to save."), 500)
 
     return ("", 200)
 
@@ -2171,13 +2209,16 @@ def api_clients_delete_sales():
         before = len(SALES)
         SALES = [v for v in SALES if str(v.get("code", "") or "").strip() not in sset]
         removed_sales = before - len(SALES)
-        if removed_sales:
-            _save_sales()
+        if removed_sales and not _save_sales():
+            logger.error("[api_clients_delete_sales] could not write sales.json for %s", clean)
+            return jsonify({"ok": False, "error": _t("Failed to save.")}), 500
 
         # remove do cadastro (clients.json)
         db = _load_clients_db()
         db = [c for c in db if str(c.get("code", "") or "").strip() not in sset]
-        _save_clients_db(db)
+        if not _save_clients_db(db):
+            logger.error("[api_clients_delete_sales] could not write clients.json for %s", clean)
+            return jsonify({"ok": False, "error": _t("Failed to save.")}), 500
 
         return jsonify({"ok": True, "removed_sales": int(removed_sales)})
     except Exception as e:
@@ -2189,8 +2230,11 @@ def api_clients_delete_sales():
 def delete_sale(sid: int):
     for i, v in enumerate(SALES):
         if int(v.get("id", 0) or 0) == int(sid):
-            SALES.pop(i)
-            _save_sales()
+            removed = SALES.pop(i)
+            if not _save_sales():
+                SALES.insert(i, removed)
+                logger.error("[delete_sale] could not write sales.json for id %s", sid)
+                return (_t("Failed to save."), 500)
             return ("", 200)
     return ("", 404)
 
