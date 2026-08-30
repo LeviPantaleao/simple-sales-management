@@ -253,17 +253,19 @@ copyleft license texts are in [`LICENSES/`](LICENSES/).
 
 ## AI assistance disclosure
 
-**The application is mine.** The concept — Electron as a "browser" shell
-around a lightweight pseudo-app, `viewer.py` packaged into a single `.exe`,
-and an installer that seeds the machine's detected language so the app
-starts in the right one — was mine, and so was the original implementation
-(the `Commit inicial` in this repository's history predates any AI
-assistance). The spreadsheet export and the PDF receipt printing were
-features I designed and had built. SSM replaces an earlier version of the
-same idea I had also built myself: an automated Excel workbook that did the
-same job by filtering between worksheets — "Clientes" and "Vendas" — and
-produced the receipt by writing the sale into a third "Imprimir Recibo"
-worksheet. SSM has been in daily use at the small business it was built for.
+**The application is mine.** I built SSM to help my mother run her small
+business — centralizing client and sales data that used to be recorded by
+hand on paper. The concept — Electron as a "browser" shell around a
+lightweight pseudo-app, `viewer.py` packaged into a single `.exe`, and an
+installer that seeds the machine's detected language so the app starts in
+the right one — was mine, and so was the original implementation (the
+`Commit inicial` in this repository's history predates any AI assistance).
+The spreadsheet export and the PDF receipt printing were features I designed
+and had built. SSM replaces an earlier version of the same idea I had also
+built myself: an automated Excel workbook that did the same job by filtering
+between worksheets — Clients and Sales — and produced the receipt by writing
+the sale into a third, Print Receipt, worksheet. SSM has been in daily use
+at the small business it was built for.
 
 **What came later, with AI assistance.** The MIT license and third-party
 license inventory, the version/build metadata cleanup, and the audit pass
