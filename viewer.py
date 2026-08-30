@@ -1,7 +1,7 @@
 # viewer.py (Electron launcher)
 from __future__ import annotations
 
-import sys, os, atexit, tempfile, msvcrt, ctypes, logging, json, locale, secrets
+import sys, os, atexit, tempfile, ctypes, logging, json, locale, secrets
 import time, socket, threading, contextlib
 import subprocess, shutil
 from pathlib import Path

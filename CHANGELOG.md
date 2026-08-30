@@ -50,6 +50,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   currently reports 6 findings (3 unused imports, 1 unused variable, and 2
   `FPDF` "undefined name" hits that are annotation-only and harmless under
   `from __future__ import annotations`).
+- The 6 findings above are fixed (removed the 3 unused imports and the
+  1 unused local variable; the 2 `FPDF` annotation hits are silenced with a
+  `TYPE_CHECKING`-guarded import instead of being left as noise). `ruff` now
+  reports zero findings, and the CI step is no longer `continue-on-error`.
+- `.gitattributes` / `.editorconfig` declared `eol=lf` for source files, but
+  every tracked text file in the repository is actually CRLF (verified
+  against the committed blobs). Rather than a repository-wide renormalize to
+  LF — a large, mechanical diff touching every tracked file, out of scope
+  for this pass — both files now declare `eol=crlf` / `end_of_line = crlf`,
+  matching what is actually committed.
+- `viewables/settingspopup.html`: the settings auto-save `fetch()` treated
+  every HTTP response as success (`fetch()` only rejects on a network
+  failure, not on a non-2xx status), so a failed `/settings/save` write
+  still showed "Saved". It now checks `res.ok` and falls through to the
+  existing "Failed to save" hint.
+- `viewables/welcome.html`: the first-run wizard's incremental auto-save to
+  `/settings/save` now logs a non-2xx response instead of treating it as
+  success silently. It stays non-fatal by design — the wizard's final
+  `#setupForm` submit (`first_setup_save`) already surfaces a real error.
 
 ### Changed
 

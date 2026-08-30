@@ -45,9 +45,8 @@ jobs:
       - name: Python tests
         run: python -m pytest
 
-      # Non-blocking for now: the rule set (ruff.toml) is deliberately narrow
-      # (E9 + pyflakes). Review the findings, then widen the rules and drop
-      # continue-on-error to make this gate real.
+      # Was continue-on-error while the initial 6 findings were triaged and
+      # fixed; now blocking. Rule set (ruff.toml) is still deliberately
+      # narrow (E9 + pyflakes) — widen it deliberately, not by accident.
       - name: Lint (ruff)
-        continue-on-error: true
         run: python -m ruff check --output-format github .

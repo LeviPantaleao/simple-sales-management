@@ -6,7 +6,6 @@ import os
 import re
 import unicodedata
 import json
-import csv
 import logging
 import base64
 import mimetypes
@@ -17,10 +16,14 @@ import time as _time
 import hmac
 import hashlib
 import secrets
+from typing import TYPE_CHECKING
 from uuid import uuid4
 from pathlib import Path
-from datetime import datetime, date
+from datetime import datetime
 from collections import defaultdict
+
+if TYPE_CHECKING:
+    from fpdf import FPDF
 
 from flask import (
     Flask, abort, flash, jsonify, make_response, redirect,
@@ -1519,7 +1522,6 @@ def save_settings():
     if not pref_locale:
         pref_locale = "auto"
 
-    old_data_dir = DATA_DIR
     try:
         base_choice = Path(os.path.expanduser(data_dir_in)).resolve()
         target_dir = _migrate_data_dir_to(base_choice)

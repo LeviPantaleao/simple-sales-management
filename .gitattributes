@@ -1,12 +1,12 @@
 * text=auto
 
-*.py text eol=lf
-*.js text eol=lf
-*.html text eol=lf
-*.json text eol=lf
-*.md text eol=lf
-*.txt text eol=lf
-*.spec text eol=lf
+*.py text eol=crlf
+*.js text eol=crlf
+*.html text eol=crlf
+*.json text eol=crlf
+*.md text eol=crlf
+*.txt text eol=crlf
+*.spec text eol=crlf
 
 *.ps1 text eol=crlf
 *.iss text eol=crlf

@@ -357,7 +357,12 @@ document.addEventListener('pointerdown', function(e){
     const fd = new FormData(form);
 
     inflight = fetch(form.action,{method:'POST',body:fd,credentials:'same-origin'})
-      .then(async ()=>{
+      .then(async (res)=>{
+        // fetch() só rejeita em falha de rede — um 500 do /settings/save
+        // (escrita em disco falhou) resolve normalmente, então sem este
+        // check o "Saved" apareceria mesmo quando nada foi salvo.
+        if(!res.ok) throw new Error('HTTP ' + res.status);
+
         // Tema: tenta aplicar no Desktop, e só recarrega se a API não existir
         if(reason === 'theme'){
           const mode = (val('theme_mode') || 'dark').toLowerCase();

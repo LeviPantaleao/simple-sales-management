@@ -574,6 +574,11 @@ async function __saveSettingsNow(reason){
     if(__welcomeInflight){ try{ await __welcomeInflight; }catch(_e){} }
 
     __welcomeInflight = fetch('/settings/save', { method:'POST', body: fd, credentials:'same-origin' })
+      // fetch() só rejeita em falha de rede — um 500 (escrita em disco
+      // falhou) resolve normalmente e passaria batido sem este check.
+      // Não-fatal aqui: é o auto-save incremental do wizard; o submit
+      // final de #setupForm (first_setup_save) já mostra erro de verdade.
+      .then(function(r){ if(!r.ok) console.error('settings save failed:', r.status); })
       .catch(function(e){ console.error(e); })
       .finally(function(){ __welcomeInflight=null; });
 

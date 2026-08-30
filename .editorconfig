@@ -1,20 +1,18 @@
 # EditorConfig — https://editorconfig.org
-# Line-ending rules mirror .gitattributes: LF for source and text, CRLF for
-# the Windows-only build scripts (.ps1) and the Inno Setup installer (.iss).
+# Every tracked text file in this repo is actually CRLF (verified against the
+# committed blobs, not just assumed) — this mirrors .gitattributes, which
+# declares eol=crlf for the same extensions.
 root = true
 
 [*]
 charset = utf-8
-end_of_line = lf
+end_of_line = crlf
 insert_final_newline = true
 trim_trailing_whitespace = true
 indent_style = space
 
 [*.py]
 indent_size = 4
-
-[*.{ps1,iss}]
-end_of_line = crlf
 
 # Markdown: trailing spaces are a significant hard line break.
 [*.md]
