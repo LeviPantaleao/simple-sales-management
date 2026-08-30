@@ -29,9 +29,12 @@ header, client block, and — when a discount applies — the original price
 struck through next to the discounted one.
 > <img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/4150fd17-4707-412d-99d1-2a56fed40530" />
 
-**Sale → receipt, end to end.** Registering a sale through printing its
-receipt.
-> <img width="1920" height="1032" alt="20260830-0414-51 2787485" src="https://github.com/user-attachments/assets/cd311392-0ce4-4784-aa92-b1737657d93e" />
+**Client list.** Every client, searchable and filterable, kept in sync with
+the sales history — a client seen in a sale always appears here.
+> _Screenshot placeholder — save the image as `docs/screenshots/client-list.png`
+> and replace this line with:_
+> `![Client list](docs/screenshots/client-list.png)`
+
 ---
 
 ## What it does

@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   entry per architectural decision — problem, alternatives considered,
   known limit), written from a Q&A pass with the project's author.
 - README: a "Known limitations and technical debt" section, a top-of-file
-  spot for screenshots/GIF plus a short context paragraph, and a rewritten
+  spot for screenshots plus a short context paragraph, and a rewritten
   "AI assistance disclosure" section separating what the author built
   unassisted from the AI-assisted audit/documentation pass.
 
