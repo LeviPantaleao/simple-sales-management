@@ -238,3 +238,48 @@ from-source build has a manual, undocumented-in-code prerequisite the CI does
 not verify. The metadata rewrite happens once, at install time, tied to the
 installer's own chosen language — the installed program's *file* metadata
 does not change later if the in-app language is switched.
+
+---
+
+## D9 — The release binaries are not code-signed
+
+**Decision:** The installer (`SSM-Setup.exe`) and the executables it ships
+(`ssm.exe`, `SSM.exe`) go out without an Authenticode signature. The goal for
+end users is "download the installer, install, use it" with no manual steps.
+
+**Context (in the author's words):** the target user is non-technical and
+should not have to work around security prompts. Code-signing is the accepted
+way to get there, but it needs a paid certificate that also has to build
+reputation, which has not been done for this project yet.
+
+**Consequences today:**
+- On a typical machine, running the unsigned installer shows a SmartScreen
+  warning ("Windows protected your PC" → *More info* → *Run anyway*). It is
+  clickable but looks alarming to a layperson.
+- On a machine with **Smart App Control** enforced (default on some clean
+  Windows 11 installs), the installer is **blocked outright** — Inno Setup
+  reports *"Unable to execute file in the temporary directory. Setup aborted.
+  Error 4551: An Application Control policy has blocked this file."* — and so
+  is the portable `ssm.exe`. There is no user-side override; the machine's
+  owner must disable Smart App Control (a one-way switch until a Windows
+  reinstall) or run the app from source (`python viewer.py`).
+
+**What is already wired for when a certificate exists:**
+`build_ssm.ps1` takes `-SignSubject` / `-SignPfx` (+ `-SignPfxPassword`) and,
+when given, signs `ssm.exe` and the renamed Electron binary with `signtool`;
+`ssm_setup.iss` signs the installer and the uninstaller when compiled with
+`/DSIGN_ENABLED` and a registered `ssmsign` tool. Without those parameters the
+build is unchanged and unsigned.
+
+**Alternatives considered:** shipping a portable ZIP instead of an installer
+(rejected — Smart App Control blocks the unsigned `.exe` just the same);
+turning the whole thing into a from-source run (rejected — defeats the
+non-technical-user goal). A self-signed certificate was not pursued because
+the user would still have to install and trust it manually.
+
+**Known limit:** even with signing wired in, `ssm_setup.iss` runs `rcedit`
+against `SSM.exe` **at install time** (D8), which invalidates any signature on
+that specific file. Full Smart App Control compatibility for the *installed*
+app would require moving the `rcedit` step into the build and signing
+afterwards — not done. The recommended path forward is a reputable OV
+certificate or a signing service such as Azure Trusted Signing.

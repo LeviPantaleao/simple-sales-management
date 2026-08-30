@@ -27,6 +27,20 @@
 #define MyAppId "{{BC0AC4E8-E10E-453F-91F5-39C728B0EA80}"
 #define BuildDir "dist\ssm"
 
+; --- Assinatura de codigo (OPCIONAL) ---------------------------------------
+;  Necessaria para o usuario final NAO ver aviso do SmartScreen e NAO ser
+;  bloqueado pelo Smart App Control (erro 4551 no instalador).
+;
+;  1) Registre um "sign tool" chamado ssmsign -- uma vez, na linha de comando:
+;
+;     iscc "/Sssmsign=signtool.exe sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /f C:\cert.pfx /p SENHA $f" ^
+;          /DSIGN_ENABLED ssm_setup.iss
+;
+;     (ou cert na loja do Windows: troque "/f C:\cert.pfx /p SENHA" por "/sm /n \"Nome no cert\"".
+;      No Inno Setup IDE: Tools > Configure Sign Tools, nome ssmsign, mesma linha.)
+;
+;  2) Sem /DSIGN_ENABLED o instalador compila igual, apenas NAO assinado.
+
 [Setup]
 AppId={#MyAppId}
 AppName={cm:AppName}
@@ -53,6 +67,13 @@ ShowLanguageDialog=yes
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 CloseApplications=yes
+#ifdef SIGN_ENABLED
+; Assina o proprio SSM-Setup.exe e o unins*.exe gerado. O motor extraido
+; para %TEMP% herda a assinatura do setup compilado -- e o que o Smart App
+; Control checa (o "erro 4551" some quando o cert tem reputacao).
+SignTool=ssmsign
+SignedUninstaller=yes
+#endif
 
 [Languages]
 Name: "en";   MessagesFile: "compiler:Default.isl"

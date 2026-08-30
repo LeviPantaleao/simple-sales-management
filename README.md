@@ -165,6 +165,10 @@ runs on.
   Electron layer, and no macOS/Linux build — the packaging pipeline
   (PyInstaller spec, Inno Setup script, DPAPI-protected export key) assumes
   Windows throughout.
+- **No code signing.** The installer and shipped executables are unsigned, so
+  Windows SmartScreen warns on first run and Smart App Control blocks them
+  outright. The build accepts a certificate when one is available, but none is
+  in use — see [`DECISIONS.md`](DECISIONS.md) D9.
 
 ---
 
@@ -179,6 +183,15 @@ The setup wizard asks for a language (English / Portuguese (BR) / Spanish),
 which determines the installed program name and the language the app starts in.
 Administrator rights are required (the installer writes firewall rules and
 program metadata).
+
+**The installer is not code-signed.** On a typical machine Windows SmartScreen
+shows a "Windows protected your PC" prompt — click *More info* then *Run
+anyway*. On a machine with **Smart App Control** enabled, the installer is
+blocked entirely (*"Error 4551: An Application Control policy has blocked this
+file"*); there is no per-file override — the machine owner has to turn Smart
+App Control off, or run the app from source (see *Build from source*). Signing
+is wired into the build for when a certificate is available — see
+[`DECISIONS.md`](DECISIONS.md) D9.
 
 ---
 

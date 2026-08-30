@@ -1,12 +1,70 @@
 # build_ssm.ps1 — Empacota o SSM com PyInstaller (onedir, pronto para Inno Setup)
 # Uso (PowerShell na pasta C:\ssm, com venv ja criado, app FECHADO):
 #   powershell -ExecutionPolicy Bypass -File .\build_ssm.ps1
+#
+# Assinatura de codigo (OPCIONAL, mas necessaria para o usuario final nao
+# ver aviso do SmartScreen nem ser bloqueado pelo Smart App Control):
+#   .\build_ssm.ps1 -SignSubject "Nome no certificado"        # cert na loja do Windows
+#   .\build_ssm.ps1 -SignPfx caminho.pfx -SignPfxPassword s3nha
+# Sem esses parametros o build roda igual, mas gera binarios NAO assinados.
+# Ver a secao "Distribuicao / assinatura" no README e a decisao D9 em DECISIONS.md.
+
+param(
+    [string]$SignSubject = "",
+    [string]$SignPfx = "",
+    [string]$SignPfxPassword = "",
+    [string]$TimestampUrl = "http://timestamp.digicert.com"
+)
 
 $ErrorActionPreference = "Stop"
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 
 $ProjectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $ProjectDir
+
+# --- Assinatura de codigo -------------------------------------------------------
+$SignEnabled = [bool]$SignSubject -or [bool]$SignPfx
+
+function Resolve-SignTool {
+    $cmd = Get-Command signtool.exe -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+    $kits = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
+    if (Test-Path $kits) {
+        $hit = Get-ChildItem -Path $kits -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+               Where-Object { $_.FullName -match '\\x64\\' } |
+               Sort-Object FullName -Descending | Select-Object -First 1
+        if ($hit) { return $hit.FullName }
+    }
+    return $null
+}
+
+function Invoke-CodeSign {
+    param([Parameter(Mandatory)][string[]]$Paths)
+    if (-not $SignEnabled) { return }
+    $signtool = Resolve-SignTool
+    if (-not $signtool) { throw "signtool.exe nao encontrado (instale o Windows SDK) -- necessario porque -Sign* foi passado." }
+    $common = @("sign", "/fd", "SHA256", "/tr", $TimestampUrl, "/td", "SHA256", "/v")
+    if ($SignPfx) {
+        $common += @("/f", $SignPfx)
+        if ($SignPfxPassword) { $common += @("/p", $SignPfxPassword) }
+    } else {
+        $common += @("/n", $SignSubject, "/sm")
+    }
+    foreach ($p in $Paths) {
+        if (-not (Test-Path $p)) { Write-Host "  (pular assinatura, nao existe: $p)" -ForegroundColor DarkYellow; continue }
+        & $signtool @common $p
+        if ($LASTEXITCODE -ne 0) { throw "signtool falhou ($LASTEXITCODE) em $p" }
+        Write-Host "  assinado: $p" -ForegroundColor Green
+    }
+}
+
+if ($SignEnabled) {
+    Write-Host "Assinatura de codigo: HABILITADA" -ForegroundColor Cyan
+} else {
+    Write-Host "Assinatura de codigo: DESABILITADA -- binarios sairao NAO assinados." -ForegroundColor Yellow
+    Write-Host "  O usuario final vera aviso do SmartScreen (clicar 'Executar assim mesmo')," -ForegroundColor Yellow
+    Write-Host "  e sera BLOQUEADO em maquinas com Smart App Control. Passe -SignSubject ou -SignPfx." -ForegroundColor Yellow
+}
 
 $VenvPython = Join-Path $ProjectDir ".venv\Scripts\python.exe"
 if (-not (Test-Path $VenvPython)) {
@@ -109,10 +167,42 @@ if ($bakeExit -ne 0 -or -not (Test-Path $bakedMainJs) -or -not (Test-Path $baked
 Write-Host "resources\app gerado e verificado com sucesso em: $ResourcesAppDir" -ForegroundColor Green
 Get-ChildItem $ResourcesAppDir | Select-Object Name, Length | Format-Table -AutoSize
 
+# 7c) Assinatura de codigo dos binarios que o projeto gera (so roda se -Sign* foi passado).
+#     - ssm.exe: bootloader do PyInstaller, sempre nao assinado -> assinar aqui.
+#     - electron.exe / SSM.exe / DLLs do Electron: ja vem assinados pelo projeto
+#       Electron. ATENCAO: o ssm_setup.iss roda rcedit no SSM.exe durante a
+#       instalacao (nome/icone localizados), o que INVALIDA a assinatura desse
+#       arquivo. Em maquinas com Smart App Control isso derruba o launch pos-
+#       instalacao. Solucao real = mover o rcedit para o build (perdendo a
+#       localizacao do nome no exe) e assinar depois; nao feito aqui.
+#     O instalador em si e assinado no passo do Inno (ver SignTool no ssm_setup.iss).
+if ($SignEnabled) {
+    Write-Host ""
+    Write-Host "7c) Assinando binarios..." -ForegroundColor Cyan
+    Invoke-CodeSign -Paths @(
+        (Join-Path $DistDir "ssm.exe"),
+        $RenamedElectron
+    )
+}
+
 Write-Host ""
 Write-Host "==============================================" -ForegroundColor Green
 Write-Host " Build SSM concluido: $DistDir" -ForegroundColor Green
 Write-Host "   dist\ssm\ssm.exe / _internal\ / viewables\ / app.ico" -ForegroundColor Green
 Write-Host "==============================================" -ForegroundColor Green
+if (-not $SignEnabled) {
+    Write-Host "AVISO: binarios NAO assinados. Ver 'Distribuicao / assinatura' no README." -ForegroundColor Yellow
+}
 Write-Host "Teste 1 (fluxo normal):  .\dist\ssm\ssm.exe" -ForegroundColor Yellow
 Write-Host "Teste 2 (bare-launch):   .\dist\ssm\_internal\node_modules\electron\dist\SSM.exe" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "Proximo passo: compilar o instalador com o Inno Setup (ssm_setup.iss)." -ForegroundColor Yellow
+if ($SignEnabled) {
+    $tsa = $TimestampUrl
+    if ($SignPfx) {
+        $tool = "signtool.exe sign /fd SHA256 /tr $tsa /td SHA256 /f $SignPfx /p $SignPfxPassword `$f"
+    } else {
+        $tool = "signtool.exe sign /fd SHA256 /tr $tsa /td SHA256 /sm /n `"$SignSubject`" `$f"
+    }
+    Write-Host "  iscc `"/Sssmsign=$tool`" /DSIGN_ENABLED ssm_setup.iss" -ForegroundColor DarkGray
+}
