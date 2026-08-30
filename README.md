@@ -277,22 +277,26 @@ copyleft license texts are in [`LICENSES/`](LICENSES/).
 ## AI assistance disclosure
 
 I've been interested in computing since I was a kid. I run my family's optics
-shop; the client and sale records used to be kept on paper, and I wanted a
-program to replace that. The idea, the requirements and the design choices are
-mine. The code was written with Claude and Claude Code: I describe what I
-want, the AI writes it, and I test it, fix what is wrong, and put it to use at
-the shop. That is true of the whole program — client and sales management, CSV
-export, the 58 mm PDF receipts, the Electron shell, the PyInstaller / Inno
-Setup packaging — and of the audit pass that added the license files,
-`ARCHITECTURE.md`, `DECISIONS.md`, this README, and the fixes in
-`CHANGELOG.md`. Commits made with AI assistance carry a `Co-Authored-By:
-Claude` trailer.
+shop; the client and sale records were kept on paper, and I wanted a program
+to replace that. The features SSM has, the concepts behind them, and the
+philosophy of how it should work are mine. I did not write the program from
+scratch — I worked it out and then built it together with AI, putting each
+piece into practice and pruning it down over many rounds.
+
+I've used AI assistance from the very start; the first commit in this
+repository was made that way too. Claude and Claude Code write the code; I
+specify what I want, run it at the shop, and correct course. That is true of
+the whole program — client and sales management, CSV export, the 58 mm PDF
+receipts, the Electron shell, the PyInstaller / Inno Setup packaging — and of
+the later audit pass that added the license files, `ARCHITECTURE.md`,
+`DECISIONS.md`, this README, and the fixes in `CHANGELOG.md`. Commits made
+with AI assistance carry a `Co-Authored-By: Claude` trailer.
 
 Before SSM I did the same job with an Excel workbook that filtered between a
 Clients sheet and a Sales sheet and printed a receipt from a third one.
 
 **Why there are so few commits.** Most of the work happened outside this
 repository — in AI chat sessions and local copies that were never committed —
-and earlier versions of the program were not kept under version control, so
-that history is gone. What is here starts from a late point in the project;
-from here on the changes are real, incremental commits.
+and the earlier versions of the program were never under version control, so
+that history is gone. What is here starts from a late point; from here on the
+changes are real, incremental commits.
