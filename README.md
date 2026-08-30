@@ -31,10 +31,7 @@ struck through next to the discounted one.
 
 **Client list.** Every client, searchable and filterable, kept in sync with
 the sales history — a client seen in a sale always appears here.
-> _Screenshot placeholder — save the image as `docs/screenshots/client-list.png`
-> and replace this line with:_
 > <img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/7bed39ca-ee73-444d-a831-d3168e81192c" />
-
 
 ---
 
