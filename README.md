@@ -17,7 +17,7 @@ matching record.
 
 **Sales list.** Every sale, searchable and filterable by month, year, code or
 product, with per-row view / edit / delete / print receipt actions.
-<img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/da5bdd04-4f24-4d93-b25d-2b015009ed5b" />
+> <img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/da5bdd04-4f24-4d93-b25d-2b015009ed5b" />
 
 **New sale.** Product, the cash-register-style amount entry (digits push in
 from the cents place), and the optional discount with a final amount that
@@ -27,11 +27,11 @@ can't exceed the original.
 **Receipt.** The 58 mm thermal-roll PDF generated for a sale: business
 header, client block, and — when a discount applies — the original price
 struck through next to the discounted one.
-> `<img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/4150fd17-4707-412d-99d1-2a56fed40530" />`
+> `<img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/4150fd17-4707-412d-99d1-2a56fed40530" />
 
 **Sale → receipt, end to end.** Registering a sale through printing its
 receipt.
-> `<img width="1920" height="1032" alt="20260830-0409-52 6288129" src="https://github.com/user-attachments/assets/8112098f-a6e3-434f-a116-e8024381e252" />`
+> `<img width="1920" height="1032" alt="20260830-0409-52 6288129" src="https://github.com/user-attachments/assets/8112098f-a6e3-434f-a116-e8024381e252" />
 
 ---
 
