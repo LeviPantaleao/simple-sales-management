@@ -19,6 +19,10 @@ matching record.
 product, with per-row view / edit / delete / print receipt actions.
 > <img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/da5bdd04-4f24-4d93-b25d-2b015009ed5b" />
 
+**Client list.** Every client, searchable and filterable, kept in sync with
+the sales history — a client seen in a sale always appears here.
+> <img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/7bed39ca-ee73-444d-a831-d3168e81192c" />
+
 **New sale.** Product, the cash-register-style amount entry (digits push in
 from the cents place), and the optional discount with a final amount that
 can't exceed the original.
@@ -28,10 +32,6 @@ can't exceed the original.
 header, client block, and — when a discount applies — the original price
 struck through next to the discounted one.
 > <img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/4150fd17-4707-412d-99d1-2a56fed40530" />
-
-**Client list.** Every client, searchable and filterable, kept in sync with
-the sales history — a client seen in a sale always appears here.
-> <img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/7bed39ca-ee73-444d-a831-d3168e81192c" />
 
 ---
 
