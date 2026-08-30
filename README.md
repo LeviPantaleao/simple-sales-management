@@ -273,25 +273,25 @@ copyleft license texts are in [`LICENSES/`](LICENSES/).
 
 ## AI assistance disclosure
 
-**The application is mine.** I built SSM to help my mother run her small
-business — centralizing client and sales data that used to be recorded by
-hand on paper. The concept — Electron as a "browser" shell around a
-lightweight pseudo-app, `viewer.py` packaged into a single `.exe`, and an
-installer that seeds the machine's detected language so the app starts in
-the right one — was mine, and so was the original implementation (the
-`Commit inicial` in this repository's history predates any AI assistance).
-The spreadsheet export and the PDF receipt printing were features I designed
-and had built. SSM replaces an earlier version of the same idea I had also
-built myself: an automated Excel workbook that did the same job by filtering
-between worksheets — Clients and Sales — and produced the receipt by writing
-the sale into a third, Print Receipt, worksheet. SSM has been in daily use
-at the small business it was built for.
+**The product is mine; most of the code was written with AI assistance.**
+I built SSM for my family's optics shop, to replace client and sales records
+that were kept by hand on paper. The idea, the requirements, and every design
+decision are mine. The way I work on it — from the `Commit inicial` in this
+repository's history onward — is to specify what I want, have Claude / Claude
+Code write it, then test it, correct it, and put it into production at the
+shop. That covers the whole program: the client and sales management, the
+spreadsheet (CSV) export, the 58 mm PDF receipts, the Electron shell, and the
+PyInstaller / Inno Setup packaging.
 
-**What came later, with AI assistance.** The MIT license and third-party
-license inventory, the version/build metadata cleanup, and the audit pass
-that produced most of the fixes in `CHANGELOG.md` and this documentation
-(`ARCHITECTURE.md`, `DECISIONS.md`, this section) were done with Claude and
-Claude Code, under my direction. Commits made with that assistance carry a
-`Co-Authored-By: Claude` trailer, kept deliberately as a transparent record
-of how the work was done. The requirements, the architecture decisions
-recorded in `DECISIONS.md`, and the review of everything shipped are mine.
+SSM replaces an earlier version of the same idea that I had put together in
+Excel: a workbook that did the job by filtering between Clients and Sales
+worksheets and printing a receipt from a third one. SSM has been in daily use
+at the shop it was built for.
+
+**The audit pass.** The MIT license and third-party inventory, the
+version/build metadata cleanup, the fixes recorded in `CHANGELOG.md`, and this
+documentation (`ARCHITECTURE.md`, `DECISIONS.md`, this section) were likewise
+done with Claude and Claude Code under my direction. Commits made with that
+assistance carry a `Co-Authored-By: Claude` trailer, kept deliberately as a
+transparent record of how the work was done. The architecture decisions
+recorded in `DECISIONS.md` and the review of everything shipped are mine.
