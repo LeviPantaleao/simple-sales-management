@@ -13,14 +13,33 @@ through that stack page by page. SSM replaces the paper trail: every client
 and sale is searchable in seconds, and a receipt prints straight from the
 matching record.
 
-<!-- Screenshots: drop 3 PNGs and 1 GIF at the paths below, then delete this
-     comment. Suggested shots: the sales list, the new-sale form, a generated
-     receipt PDF; GIF: register a sale end-to-end through printing the receipt. -->
-| | | |
-|---|---|---|
-| ![Sales list](docs/screenshots/sales-list.png) | ![New sale](docs/screenshots/new-sale.png) | ![Receipt](docs/screenshots/receipt.png) |
+### Screenshots
 
-![Sale-to-receipt flow](docs/screenshots/sale-to-receipt.gif)
+**Sales list.** Every sale, searchable and filterable by month, year, code or
+product, with per-row view / edit / delete / print receipt actions.
+> _Screenshot placeholder — save the image as `docs/screenshots/sales-list.png`
+> and replace this line with:_
+> `![Sales list](docs/screenshots/sales-list.png)`
+
+**New sale.** Product, the cash-register-style amount entry (digits push in
+from the cents place), and the optional discount with a final amount that
+can't exceed the original.
+> _Screenshot placeholder — save the image as `docs/screenshots/new-sale.png`
+> and replace this line with:_
+> `![New sale](docs/screenshots/new-sale.png)`
+
+**Receipt.** The 58 mm thermal-roll PDF generated for a sale: business
+header, client block, and — when a discount applies — the original price
+struck through next to the discounted one.
+> _Screenshot placeholder — save the image as `docs/screenshots/receipt.png`
+> and replace this line with:_
+> `![Receipt](docs/screenshots/receipt.png)`
+
+**Sale → receipt, end to end.** Registering a sale through printing its
+receipt.
+> _GIF placeholder — save the file as `docs/screenshots/sale-to-receipt.gif`
+> and replace this line with:_
+> `![Sale-to-receipt flow](docs/screenshots/sale-to-receipt.gif)`
 
 ---
 
