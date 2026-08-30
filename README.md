@@ -273,25 +273,23 @@ copyleft license texts are in [`LICENSES/`](LICENSES/).
 
 ## AI assistance disclosure
 
-**The product is mine; most of the code was written with AI assistance.**
-I built SSM for my family's optics shop, to replace client and sales records
-that were kept by hand on paper. The idea, the requirements, and every design
-decision are mine. The way I work on it — from the `Commit inicial` in this
-repository's history onward — is to specify what I want, have Claude / Claude
-Code write it, then test it, correct it, and put it into production at the
-shop. That covers the whole program: the client and sales management, the
-spreadsheet (CSV) export, the 58 mm PDF receipts, the Electron shell, and the
-PyInstaller / Inno Setup packaging.
+I've been interested in computing since I was a kid. I run my family's optics
+shop; the client and sale records used to be kept on paper, and I wanted a
+program to replace that. The idea, the requirements and the design choices are
+mine. The code was written with Claude and Claude Code: I describe what I
+want, the AI writes it, and I test it, fix what is wrong, and put it to use at
+the shop. That is true of the whole program — client and sales management, CSV
+export, the 58 mm PDF receipts, the Electron shell, the PyInstaller / Inno
+Setup packaging — and of the audit pass that added the license files,
+`ARCHITECTURE.md`, `DECISIONS.md`, this README, and the fixes in
+`CHANGELOG.md`. Commits made with AI assistance carry a `Co-Authored-By:
+Claude` trailer.
 
-SSM replaces an earlier version of the same idea that I had put together in
-Excel: a workbook that did the job by filtering between Clients and Sales
-worksheets and printing a receipt from a third one. SSM has been in daily use
-at the shop it was built for.
+Before SSM I did the same job with an Excel workbook that filtered between a
+Clients sheet and a Sales sheet and printed a receipt from a third one.
 
-**The audit pass.** The MIT license and third-party inventory, the
-version/build metadata cleanup, the fixes recorded in `CHANGELOG.md`, and this
-documentation (`ARCHITECTURE.md`, `DECISIONS.md`, this section) were likewise
-done with Claude and Claude Code under my direction. Commits made with that
-assistance carry a `Co-Authored-By: Claude` trailer, kept deliberately as a
-transparent record of how the work was done. The architecture decisions
-recorded in `DECISIONS.md` and the review of everything shipped are mine.
+**Why there are so few commits.** Most of the work happened outside this
+repository — in AI chat sessions and local copies that were never committed —
+and earlier versions of the program were not kept under version control, so
+that history is gone. What is here starts from a late point in the project;
+from here on the changes are real, incremental commits.
