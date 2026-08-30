@@ -6,6 +6,10 @@ import time, socket, threading, contextlib
 import subprocess, shutil
 from pathlib import Path
 
+# Module logger. logging.basicConfig(format="%(message)s") is called in main();
+# the SSM_URL= / SSM_TOKEN= handshake lines stay on stdout via print() (see below).
+logger = logging.getLogger("ssm.viewer")
+
 # --------------------------------------------------------------------
 # App identity (mantém compatibilidade com seus paths antigos)
 # --------------------------------------------------------------------
@@ -1430,7 +1434,7 @@ def main():
     ).start()
 
     if not wait_http_up(APP_HOST, port, timeout=20):
-        print("[FATAL] Flask server did not respond in time.", file=sys.stderr)
+        logger.error("[FATAL] Flask server did not respond in time.")
         return 2
 
     base = f"http://{APP_HOST}:{port}"
@@ -1450,14 +1454,16 @@ def main():
     # ?k=<token> só na 1ª navegação: o /i18n/set valida, o server seta o
     # cookie ssm_auth e redireciona pra "/" (o token some da barra de endereço).
     start_url = f"{base}/i18n/set?lang={effective_tag}&next=/&k={SESSION_TOKEN}"
-    print(f"[INFO] Started at {base} (lang={effective}, theme={theme_mode})")
+    logger.info("[INFO] Started at %s (lang=%s, theme=%s)", base, effective, theme_mode)
 
 
 
     # --- NEW: backend-only mode (Electron empacotado controla a janela) ---
     # Quando SSM_NO_ELECTRON=1, apenas inicia o Flask e imprime a URL para o Electron empacotado abrir.
     if os.environ.get("SSM_NO_ELECTRON") == "1":
-        # O Electron (main.js) captura isso pelo stdout
+        # NÃO trocar por logging: main.js lê estas duas linhas do STDOUT do
+        # processo filho (child.stdout.on('data') + /SSM_URL=/, /SSM_TOKEN=/).
+        # O logging vai para o stderr e quebraria o handshake.
         print(f"SSM_URL={start_url}", flush=True)
         print(f"SSM_TOKEN={SESSION_TOKEN}", flush=True)
         try:
@@ -1468,7 +1474,7 @@ def main():
 
     electron = _find_electron_executable()
     if not electron:
-        print("[FATAL] Electron not found. Install Electron (npm i -D electron) or set ELECTRON_PATH.", file=sys.stderr)
+        logger.error("[FATAL] Electron not found. Install Electron (npm i -D electron) or set ELECTRON_PATH.")
         return 3
 
     electron = _prefer_electron_exe(electron)
@@ -1519,7 +1525,7 @@ def main():
         return proc.wait()
     except Exception as e:
         import traceback
-        print(f"[FATAL] Failed to launch Electron: {e}", file=sys.stderr, flush=True)
+        logger.error("[FATAL] Failed to launch Electron: %s", e)
         traceback.print_exc(file=sys.stderr)
         sys.stderr.flush()
         return 4
@@ -1536,6 +1542,7 @@ def _bake_resources_app(target_dir: Path) -> int:
     do sistema de traduções (title_map completo, pt/es/en) e strings de diálogo
     em inglês como base (a UI do app em si continua 100% localizada pelo Flask).
     """
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     try:
         title_map = _title_map_from_languages()
     except Exception:
@@ -1560,7 +1567,7 @@ def _bake_resources_app(target_dir: Path) -> int:
     except Exception:
         pass
 
-    print(f"[bake] resources/app gravado em {target_dir}")
+    logger.info("[bake] resources/app gravado em %s", target_dir)
     return 0
 
 

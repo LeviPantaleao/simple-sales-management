@@ -7,6 +7,7 @@ import re
 import unicodedata
 import json
 import csv
+import logging
 import base64
 import mimetypes
 import random
@@ -43,6 +44,11 @@ except Exception:
         return "en"
     def _os_locale_tag_raw() -> str:
         return "en"
+
+# Module logger. server.py is always imported (by viewer.py, or by the test
+# suite), never run as __main__, so it configures nothing itself — the
+# entry point (viewer.py) calls logging.basicConfig.
+logger = logging.getLogger("ssm.server")
 
 # --- PDF (fpdf2) --- (lazy import to speed startup)
 def _get_FPDF():
@@ -122,7 +128,7 @@ def _resolve_templates_dir(base_dir: Path) -> Path:
 TEMPLATES_DIR = _resolve_templates_dir(BASE_DIR)
 
 with contextlib.suppress(Exception):
-    print(f"[SSM] Templates dir: {TEMPLATES_DIR}", file=sys.stderr)
+    logger.info("[SSM] Templates dir: %s", TEMPLATES_DIR)
 CONFIG_DIR = Path(os.environ.get("SSM_CONFIG_DIR", str(Path.home() / ".SimpleSalesManagement")))
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 _BOOTSTRAP_FILE = CONFIG_DIR / "bootstrap.json"
@@ -506,7 +512,7 @@ def _load_settings() -> dict:
                     pass
                 return out
     except Exception as e:
-        print("[SETTINGS] load fail:", e)
+        logger.warning("[SETTINGS] load fail: %s", e)
     return dict(_DEFAULT_SETTINGS)
 
 
@@ -520,7 +526,7 @@ def _save_settings(obj: dict) -> None:
         tmp.write_text(json.dumps(d, ensure_ascii=False, indent=2), "utf-8")
         tmp.replace(SETTINGS_FILE)
     except Exception as e:
-        print("[SETTINGS] write fail:", e)
+        logger.error("[SETTINGS] write fail: %s", e)
 
 
 babel = Babel()
@@ -705,7 +711,7 @@ def _save_json(p: Path, obj):
         tmp.replace(p)
         return True
     except Exception as e:
-        print("[JSON] write fail:", e)
+        logger.error("[JSON] write fail: %s", e)
         return False
 
 
@@ -1344,7 +1350,7 @@ def first_setup_save():
         try:
             target_dir = _migrate_data_dir_to(base_dir_in)
         except Exception as e:
-            print("[first_setup] migrate error:", e)
+            logger.error("[first_setup] migrate error: %s", e)
             target_dir = DATA_DIR
 
     s = _load_settings()
@@ -1433,7 +1439,7 @@ def save_settings():
         base_choice = Path(os.path.expanduser(data_dir_in)).resolve()
         target_dir = _migrate_data_dir_to(base_choice)
     except Exception as e:
-        print("[settings/save] migrate error:", e)
+        logger.error("[settings/save] migrate error: %s", e)
         target_dir = DATA_DIR
 
     # Keep user-selected directories.

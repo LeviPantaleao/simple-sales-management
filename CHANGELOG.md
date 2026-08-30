@@ -46,6 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `server.py` and `viewer.py` now log through a module logger
+  (`logging.getLogger("ssm.server")` / `"ssm.viewer"`) instead of `print()`.
+  Message text is unchanged. The two `SSM_URL=` / `SSM_TOKEN=` lines in
+  `viewer.py` stay on stdout via `print()` on purpose: `main.js` parses them
+  from the child process's stdout and logging would send them to stderr.
 - `viewables/app-common.js` no longer carries its own copy of the money
   arithmetic; `enforceMoneyMask` / `renderMoneyMask` now delegate to
   `window.MoneyMask` from `money-mask.js`.
