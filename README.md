@@ -22,7 +22,7 @@ product, with per-row view / edit / delete / print receipt actions.
 **New sale.** Product, the cash-register-style amount entry (digits push in
 from the cents place), and the optional discount with a final amount that
 can't exceed the original.
-> `<img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/1785ef09-8f8a-404d-aa42-fbbbcdee267d" />`
+> <img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/1785ef09-8f8a-404d-aa42-fbbbcdee267d" />
 
 **Receipt.** The 58 mm thermal-roll PDF generated for a sale: business
 header, client block, and — when a discount applies — the original price
