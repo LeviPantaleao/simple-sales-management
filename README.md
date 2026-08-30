@@ -27,12 +27,11 @@ can't exceed the original.
 **Receipt.** The 58 mm thermal-roll PDF generated for a sale: business
 header, client block, and — when a discount applies — the original price
 struck through next to the discounted one.
-> `<img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/4150fd17-4707-412d-99d1-2a56fed40530" />
+> <img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/4150fd17-4707-412d-99d1-2a56fed40530" />
 
 **Sale → receipt, end to end.** Registering a sale through printing its
 receipt.
-> `<img width="1920" height="1032" alt="20260830-0409-52 6288129" src="https://github.com/user-attachments/assets/8112098f-a6e3-434f-a116-e8024381e252" />
-
+> <img width="1920" height="1032" alt="20260830-0414-51 2787485" src="https://github.com/user-attachments/assets/cd311392-0ce4-4784-aa92-b1737657d93e" />
 ---
 
 ## What it does
