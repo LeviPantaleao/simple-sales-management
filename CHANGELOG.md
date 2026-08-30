@@ -49,8 +49,19 @@ followed the initial commit — not a separate version.
 - `tests/test_server.py`: pytest coverage for `_parse_money_any`,
   `_verify_bundle` (valid / tampered payload / tampered MAC / wrong key id /
   malformed / non-dict), `_save_json` (atomic write, no leftover `.tmp`,
-  failure leaves the original intact), `_slugify_short` and
-  `_receipt_filename_for_sale`.
+  failure leaves the original intact), `_slugify_short`,
+  `_receipt_filename_for_sale`, the HMAC primitives (`_canon_json_bytes`,
+  `_hmac_b64url`, `_kid_from_key`), `_coerce_created_at`,
+  `_normalize_sale_dict`, `_apply_sales_filters`, `available_years`,
+  `_month_pairs`, `generate_unique_code` and `_sanitize_text_pdf`.
+- `tests/test_languages.py`: `canon_locale` (short codes, Windows long
+  forms, `auto`, junk), `t()` (English msgid passthrough, pt/es lookups,
+  unknown-key fallback, all-caps handling) and `os_locale_tag`.
+- `tests/test_routes.py`: the session-token gate (403 without, allow with
+  header / `?k=`, cookie is then set), new-sale validation on `POST /sale`
+  (final > amount and negative amount are rejected, nothing stored), and an
+  export → download → import round trip (including that a tampered bundle
+  imports but is flagged `verified: false`).
 - `tests/conftest.py` and `pytest.ini`: hermetic setup that redirects
   `SSM_CONFIG_DIR` / `APP_DATA_DIR` to a temp directory before importing
   `server`, so the suite never reads or writes real business data.

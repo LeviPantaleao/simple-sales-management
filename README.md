@@ -157,10 +157,13 @@ runs on.
   blocks inside `management.html` and the other `viewables/*.html` files)
   rather than living in separate `.js` files, except for the two files that
   were extracted for testability (`app-common.js`, `money-mask.js`).
-- **Test coverage is narrow.** `tests/test_server.py` and
-  `tests/money_mask.test.js` cover money parsing, the signed-bundle
-  verifier, atomic writes, and the money-input mask — not the route handlers,
-  the PDF rendering, the i18n table, or the Electron shell.
+- **Test coverage is partial.** The Python tests cover money parsing, the
+  signed-bundle verifier and its HMAC primitives, atomic writes, sale
+  normalisation and filtering, the i18n `canon_locale` / `t()` helpers, the
+  session-token gate, new-sale validation and an export → import round trip;
+  the Node test covers the money-input mask. Not covered: the PDF rendering,
+  most of the route handlers, and the Electron shell (`viewer.py`'s
+  `main.js` generator has no tests at all — see D5).
 - **Single user, single machine, Windows only.** There are no user accounts,
   no concurrent-writer support beyond the single-instance guarantee at the
   Electron layer, and no macOS/Linux build — the packaging pipeline

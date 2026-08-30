@@ -656,7 +656,7 @@ def _sanitize_text_pdf(txt) -> str:
     s = s.replace("\r\n", "\n").replace("\r", "\n")
     # replace common punctuation with safe ASCII
     for k, v in _PDF_PUNCT_MAP.items():
-        s = s.replace(k.encode("utf-8").decode("unicode_escape"), v)
+        s = s.replace(k, v)
     # drop other control chars (except \n and \t -> space)
     s = "".join((" " if ch == "\t" else ch) for ch in s if (ch == "\n" or ord(ch) >= 32))
     # keep latin-1, replace anything else

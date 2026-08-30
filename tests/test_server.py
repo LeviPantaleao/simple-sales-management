@@ -244,3 +244,178 @@ def test_receipt_filename_without_name_is_still_valid(srv):
 
     assert _RECEIPT_RE.match(name), name
     assert "_42_" in name
+
+
+# --------------------------------------------------------------------------------------
+# Canonical JSON + HMAC primitives (used to sign the export bundle)
+# --------------------------------------------------------------------------------------
+
+def test_canon_json_bytes_is_order_independent_and_compact(srv):
+    a = srv._canon_json_bytes({"b": 1, "a": [3, 2], "c": {"y": 1, "x": 2}})
+    b = srv._canon_json_bytes({"c": {"x": 2, "y": 1}, "a": [3, 2], "b": 1})
+    assert a == b
+    assert b" " not in a and b"\n" not in a          # compact separators
+    assert a == b'{"a":[3,2],"b":1,"c":{"x":2,"y":1}}'
+
+
+def test_hmac_b64url_is_stable_urlsafe_and_unpadded(srv):
+    key = b"k" * 32
+    mac1 = srv._hmac_b64url(key, b"payload")
+    mac2 = srv._hmac_b64url(key, b"payload")
+    assert mac1 == mac2
+    assert "=" not in mac1 and "+" not in mac1 and "/" not in mac1
+    assert srv._hmac_b64url(key, b"payload x") != mac1
+    assert srv._hmac_b64url(b"j" * 32, b"payload") != mac1
+
+
+def test_kid_from_key_is_10_hex_chars_and_key_specific(srv):
+    k1 = srv._kid_from_key(b"a" * 32)
+    assert len(k1) == 10 and all(c in "0123456789abcdef" for c in k1)
+    assert srv._kid_from_key(b"a" * 32) == k1
+    assert srv._kid_from_key(b"b" * 32) != k1
+
+
+# --------------------------------------------------------------------------------------
+# _coerce_created_at / _normalize_sale_dict
+# --------------------------------------------------------------------------------------
+
+def test_coerce_created_at_parses_known_shapes(srv):
+    dt = srv.datetime
+    assert srv._coerce_created_at("2024-03-05T10:00:00") == dt(2024, 3, 5, 10, 0, 0)
+    assert srv._coerce_created_at("2024-03-05") == dt(2024, 3, 5, 0, 0, 0)
+    assert srv._coerce_created_at(dt(2020, 1, 1)) == dt(2020, 1, 1)
+    # unix seconds
+    assert srv._coerce_created_at(1_709_631_600).year == 2024
+
+
+@pytest.mark.parametrize("junk", ["", None, "not a date", "2024-13-99"])
+def test_coerce_created_at_falls_back_to_now(srv, junk):
+    before = srv.datetime.now()
+    got = srv._coerce_created_at(junk)
+    after = srv.datetime.now()
+    assert isinstance(got, srv.datetime)
+    assert before <= got <= after
+
+
+def test_normalize_sale_dict_fills_defaults_and_parses_money(srv):
+    d = srv._normalize_sale_dict({"code": "12", "value": "1.234,56",
+                                  "final_amount": "1.000,00", "id": "7"})
+    assert d["amount"] == pytest.approx(1234.56)
+    assert d["final_amount"] == pytest.approx(1000.0)
+    assert d["id"] == 7
+    for k in ("name", "address", "contact", "client_description",
+              "product", "sale_description"):
+        assert d[k] == ""
+    assert isinstance(d["created_at"], srv.datetime)
+
+
+def test_normalize_sale_dict_defaults_final_to_amount(srv):
+    d = srv._normalize_sale_dict({"amount": "50"})
+    assert d["final_amount"] == pytest.approx(50.0)
+
+
+def test_normalize_sale_dict_accepts_legacy_aliases(srv):
+    d = srv._normalize_sale_dict({"value": "10", "final_value": "8",
+                                  "description": "legacy note"})
+    assert d["amount"] == pytest.approx(10.0)
+    assert d["final_amount"] == pytest.approx(8.0)
+    assert d["sale_description"] == "legacy note"
+
+
+# --------------------------------------------------------------------------------------
+# _apply_sales_filters
+# --------------------------------------------------------------------------------------
+
+def _sale(srv, code, product, desc, when):
+    return {"code": code, "product": product, "sale_description": desc, "created_at": when}
+
+
+def test_apply_sales_filters_by_period_and_query(srv):
+    dt = srv.datetime
+    rows = [
+        _sale(srv, "000001", "Lens", "left eye", dt(2024, 1, 10)),
+        _sale(srv, "000002", "Frame", "titanium", dt(2024, 3, 4)),
+        _sale(srv, "000099", "Lens cloth", "spare", dt(2023, 3, 4)),
+        {"code": "x", "product": "no date"},  # skipped: created_at not a datetime
+    ]
+
+    only_2024 = srv._apply_sales_filters(rows, {"year": 2024})
+    assert {r["code"] for r in only_2024} == {"000001", "000002"}
+
+    march = srv._apply_sales_filters(rows, {"month": 3})
+    assert {r["code"] for r in march} == {"000002", "000099"}
+
+    by_product = srv._apply_sales_filters(rows, {"q": "lens", "field": "product"})
+    assert {r["code"] for r in by_product} == {"000001", "000099"}
+
+    by_code = srv._apply_sales_filters(rows, {"q": "0001", "field": "code"})
+    assert [r["code"] for r in by_code] == ["000001"]
+
+
+def test_apply_sales_filters_sort_order(srv):
+    dt = srv.datetime
+    rows = [
+        _sale(srv, "a", "p", "d", dt(2024, 1, 1)),
+        _sale(srv, "b", "p", "d", dt(2024, 6, 1)),
+        _sale(srv, "c", "p", "d", dt(2024, 3, 1)),
+    ]
+    asc = [r["code"] for r in srv._apply_sales_filters(rows, {"order": "asc"})]
+    desc = [r["code"] for r in srv._apply_sales_filters(rows, {"order": "desc"})]
+    assert asc == ["a", "c", "b"]
+    assert desc == ["b", "c", "a"]
+
+
+# --------------------------------------------------------------------------------------
+# available_years / _month_pairs / generate_unique_code
+# --------------------------------------------------------------------------------------
+
+def test_available_years_is_sorted_and_unique(srv):
+    dt = srv.datetime
+    rows = [
+        {"created_at": dt(2021, 5, 1)},
+        {"created_at": dt(2023, 1, 1)},
+        {"created_at": dt(2021, 12, 31)},
+        {"no": "date"},
+    ]
+    assert srv.available_years(rows) == [2021, 2023]
+
+
+def test_month_pairs_has_twelve_entries(srv):
+    mp = srv._month_pairs()
+    assert len(mp) == 12
+    assert [n for n, _label in mp] == list(range(1, 13))
+
+
+def test_generate_unique_code_is_six_digits_and_avoids_existing(srv, data_dir, monkeypatch):
+    taken = {f"{i:06d}" for i in range(1000)}
+    monkeypatch.setattr(srv, "clients_map_latest", lambda: {c: {} for c in taken})
+    for _ in range(50):
+        c = srv.generate_unique_code()
+        assert len(c) == 6 and c.isdigit()
+        assert c not in taken
+
+
+# --------------------------------------------------------------------------------------
+# _sanitize_text_pdf
+# --------------------------------------------------------------------------------------
+
+def test_sanitize_text_pdf_maps_smart_punctuation_to_ascii(srv):
+    got = srv._sanitize_text_pdf("“quote” – — …  end")
+    assert got == '"quote" - - ...  end'
+
+
+def test_sanitize_text_pdf_normalises_whitespace_and_controls(srv):
+    assert srv._sanitize_text_pdf("a\r\nb") == "a\nb"          # CRLF -> LF
+    assert srv._sanitize_text_pdf("a" + chr(9) + "b") == "ab"  # tab dropped
+    assert srv._sanitize_text_pdf("a" + chr(7) + "b") == "ab"  # bell dropped
+    assert srv._sanitize_text_pdf("keep\nnewline") == "keep\nnewline"
+
+
+def test_sanitize_text_pdf_keeps_latin1_drops_the_rest(srv):
+    assert srv._sanitize_text_pdf("café") == "café"        # é survives
+    assert srv._sanitize_text_pdf("日本") == "??"            # non-latin-1
+
+
+def test_sanitize_text_pdf_handles_none_and_numbers(srv):
+    assert srv._sanitize_text_pdf(None) == ""
+    assert srv._sanitize_text_pdf(1234) == "1234"
